@@ -245,6 +245,7 @@ class RunDue(unittest.TestCase):
             with mock.patch.object(ig, "publish", fake_publish), \
                  mock.patch.object(ig, "load_creds", lambda: {}), \
                  mock.patch.object(ig, "maybe_refresh", lambda c: c), \
+                 mock.patch.object(ig, "publish_quota_left", lambda c: 50), \
                  mock.patch.object(ig, "CREDS", Path(d, "none.json")):
                 res = ig.run_due(path)
             rows = ig.read_rows(path)
@@ -352,6 +353,144 @@ class Schedule(unittest.TestCase):
         self.assertEqual(len(lines), 2)
         self.assertIn("'/x y/ig.py'", lines[1])
         self.assertTrue(res["installed"])
+
+
+def http_error(code, body, headers=None):
+    e = ig.HTTPError("https://graph/x", code, "err", headers or {}, None)
+    e.read = lambda: body.encode()
+    return e
+
+
+class OkResp:
+    def __init__(self, body=b'{"ok": true}'):
+        self.body = body
+    def __enter__(self): return self
+    def __exit__(self, *a): pass
+    def read(self): return self.body
+
+
+class RateLimits(unittest.TestCase):
+    def test_throttle_codes_raise_ratelimited_with_regain_time(self):
+        hdr = {"X-Business-Use-Case-Usage": '{"123": [{"type": "instagram", "estimated_time_to_regain_access": 17}]}'}
+        for code, body in ((400, '{"error": {"code": 4, "message": "Application request limit reached"}}'),
+                           (400, '{"error": {"code": 80002, "message": "too many calls"}}'),
+                           (429, "slow down")):
+            with mock.patch.object(ig, "urlopen", side_effect=http_error(code, body, hdr)), \
+                 mock.patch.object(ig.time, "sleep") as sl:
+                with self.assertRaises(ig.RateLimited) as cm:
+                    ig.http_json("GET", "https://g/x")
+            self.assertIn("17 min", str(cm.exception))
+            sl.assert_not_called()  # never hammer a throttled API
+
+    def test_get_retries_transient_then_succeeds(self):
+        effects = [http_error(500, "{}"), http_error(400, '{"error": {"is_transient": true}}'), OkResp()]
+        with mock.patch.object(ig, "urlopen", side_effect=effects), mock.patch.object(ig.time, "sleep") as sl:
+            self.assertEqual(ig.http_json("GET", "https://g/x"), {"ok": True})
+        self.assertEqual([c.args[0] for c in sl.call_args_list], [2, 4])
+
+    def test_post_is_never_retried(self):
+        with mock.patch.object(ig, "urlopen", side_effect=[http_error(500, "{}"), OkResp()]) as u, \
+             mock.patch.object(ig.time, "sleep"):
+            with self.assertRaises(ig.IGError):
+                ig.http_json("POST", "https://g/media_publish", "T", {"creation_id": "1"})
+        self.assertEqual(u.call_count, 1)
+
+    def test_status_polling_backs_off(self):
+        states = iter(["IN_PROGRESS"] * 6 + ["FINISHED"])
+        with mock.patch.object(ig, "api", lambda *a, **k: {"status_code": next(states)}), \
+             mock.patch.object(ig.time, "sleep") as sl:
+            ig.wait_finished({}, "C1")
+        self.assertEqual([c.args[0] for c in sl.call_args_list], [3, 6, 12, 24, 48, 60])
+
+    def test_reply_pacing(self):
+        with tempfile.TemporaryDirectory() as d, mock.patch.object(ig, "CONFIG_DIR", Path(d)), \
+             mock.patch.object(ig.time, "sleep") as sl:
+            self.assertEqual(ig.pace("reply", 20), 0)
+            waited = ig.pace("reply", 20)
+        self.assertGreater(waited, 18)
+        self.assertEqual(sl.call_count, 1)
+
+    def run_due_with(self, d, n_rows, quota, publish):
+        path = os.path.join(d, "content.csv")
+        ig.write_rows(path, [row(id=str(i), status="scheduled", publish_at="2020-01-01 00:00", type="image",
+                                 media="https://h/a.jpg") for i in range(n_rows)])
+        with mock.patch.object(ig, "publish", publish), mock.patch.object(ig, "load_creds", lambda: {}), \
+             mock.patch.object(ig, "maybe_refresh", lambda c: c), \
+             mock.patch.object(ig, "publish_quota_left", quota), mock.patch.object(ig, "CREDS", Path(d, "none.json")):
+            res = ig.run_due(path)
+        return res, ig.read_rows(path)
+
+    def test_quota_exhausted_rows_wait_not_fail(self):
+        with tempfile.TemporaryDirectory() as d:
+            res, rows = self.run_due_with(d, 3, lambda c: 2, lambda *a: {"ig_media_id": "M", "permalink": "p"})
+        self.assertEqual((res["posted"], res["waiting"], res["quota_left"]), (["0", "1"], ["2"], 0))
+        self.assertEqual(rows[2]["status"], "scheduled")
+        self.assertIn("quota", rows[2]["error"])
+
+    def test_rate_limit_mid_run_stops_and_keeps_rows_scheduled(self):
+        calls = []
+
+        def publish(*a):
+            calls.append(1)
+            if len(calls) == 2:
+                raise ig.RateLimited("Rate limited")
+            return {"ig_media_id": "M", "permalink": "p"}
+
+        with tempfile.TemporaryDirectory() as d:
+            res, rows = self.run_due_with(d, 4, lambda c: 50, publish)
+        self.assertEqual(len(calls), 2)  # stopped after the throttle
+        self.assertEqual(res["posted"], ["0"])
+        self.assertEqual(res["waiting"], ["1", "2", "3"])
+        self.assertEqual([r["status"] for r in rows], ["posted", "scheduled", "scheduled", "scheduled"])
+
+    def test_throttled_quota_check_posts_nothing(self):
+        def boom(c):
+            raise ig.RateLimited("Rate limited")
+        with tempfile.TemporaryDirectory() as d:
+            res, rows = self.run_due_with(d, 2, boom, lambda *a: self.fail("must not publish"))
+        self.assertEqual(res["waiting"], ["0", "1"])
+
+    def test_validate_warns_over_50_in_24h(self):
+        tz = ZoneInfo("UTC")
+        rows = [row(id=str(i), status="scheduled", type="image", media="https://h/a.jpg",
+                    publish_at=f"2026-11-02 {i // 60:02d}:{i % 60:02d}") for i in range(51)]
+        _, warnings = ig.validate_rows(rows, Path("."), tz, datetime(2026, 11, 1, tzinfo=tz))
+        self.assertTrue(any("More than 50" in w for w in warnings))
+        _, warnings = ig.validate_rows(rows[:50], Path("."), tz, datetime(2026, 11, 1, tzinfo=tz))
+        self.assertFalse(any("More than 50" in w for w in warnings))
+
+
+class PathSafety(unittest.TestCase):
+    def test_calendar_cannot_reach_outside_its_folder(self):
+        with tempfile.TemporaryDirectory() as d:
+            cal = Path(d, "cal")
+            (cal / "media").mkdir(parents=True)
+            fake_jpeg(Path(d, "secret.jpg"), 1080, 1350)
+            tz = ZoneInfo("UTC")
+            rows = [row(id="1", publish_at="2026-11-02 09:00", type="image", status="draft", media="../secret.jpg"),
+                    row(id="2", publish_at="2026-11-02 09:00", type="reel", status="draft", media="https://h/v.mp4",
+                        cover="/etc/passwd"),
+                    row(id="3", publish_at="2026-11-02 09:00", type="reel", status="draft", media="https://h/v.mp4",
+                        cover="../secret.jpg")]
+            problems, _ = ig.validate_rows(rows, cal, tz, datetime(2026, 11, 1, tzinfo=tz))
+            self.assertTrue(any(p.startswith("1:") and "outside the calendar folder" in p for p in problems))
+            self.assertTrue(any(p.startswith("2:") and "cover must be a .jpg" in p for p in problems))
+            self.assertTrue(any(p.startswith("3:") and "outside the calendar folder" in p for p in problems))
+
+            path = str(cal / "content.csv")
+            ig.write_rows(path, [row(id="1", status="scheduled", publish_at="2020-01-01 00:00", type="image",
+                                     media="../secret.jpg")])
+            with mock.patch.object(ig, "publish", lambda *a: self.fail("must not publish")), \
+                 mock.patch.object(ig, "load_creds", lambda: {}), mock.patch.object(ig, "maybe_refresh", lambda c: c), \
+                 mock.patch.object(ig, "publish_quota_left", lambda c: 50), \
+                 mock.patch.object(ig, "CREDS", Path(d, "none.json")):
+                res = ig.run_due(path)
+            self.assertIn("outside the calendar folder", res["failed"][0]["error"])
+
+    def test_non_jpeg_cover_refused_before_any_upload(self):
+        with mock.patch.object(ig, "public_urls", side_effect=AssertionError("must not upload")):
+            with self.assertRaises(ig.IGError):
+                ig.publish({"user_id": "U"}, "reel", ["https://h/v.mp4"], "", row(type="reel", cover="/etc/passwd"))
 
 
 class Accounts(unittest.TestCase):

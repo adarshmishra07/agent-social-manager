@@ -20,7 +20,7 @@ import tempfile
 import threading
 import time
 import uuid
-from datetime import datetime
+from datetime import datetime, timedelta
 from functools import partial
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -47,11 +47,18 @@ IMAGE_EXT = {".jpg", ".jpeg"}  # Instagram API accepts JPEG only
 VIDEO_EXT = {".mp4", ".mov"}
 MAX_MB = {"image": 8, "video": 300, "story_video": 100}  # Instagram API limits
 REFRESH_AFTER_DAYS = 7  # long-lived tokens last 60 days; refresh early and often
-STATUS_POLL_SECONDS = 10
-STATUS_POLL_MAX = 60  # 10 minutes, enough for a reel download
+STATUS_WAIT_SECONDS = 600  # reels can take minutes to download and process
+RATE_LIMIT_CODES = {4, 17, 32, 613, 80002}  # Meta app, user and business-use-case throttling
+GET_TRIES = 3  # retry reads on transient errors; writes are never retried blind (no double posts)
+PUBLISH_DAILY_LIMIT = 50  # fallback if the API doesn't report its own quota_total
+REPLY_GAP_SECONDS = 20  # rapid-fire replies can get the account action-blocked
 
 
 class IGError(Exception):
+    pass
+
+
+class RateLimited(IGError):
     pass
 
 
@@ -97,13 +104,62 @@ def http_json(method, url, token=None, params=None):
     else:
         data = urlencode(params).encode()
     headers = {"Authorization": f"Bearer {token}"} if token else {}
+    where = f"{method} {url.split('?')[0]}"
+    tries = GET_TRIES if method == "GET" else 1
+    for attempt in range(tries):
+        last = attempt + 1 == tries
+        try:
+            with urlopen(Request(url, data=data, method=method, headers=headers), timeout=60) as r:
+                return json.load(r)
+        except HTTPError as e:
+            body = e.read().decode(errors="replace")
+            try:
+                err = json.loads(body).get("error", {})
+            except (ValueError, AttributeError):
+                err = {}
+            if e.code == 429 or err.get("code") in RATE_LIMIT_CODES:
+                mins = regain_minutes(e.headers)
+                when = f"access returns in about {mins} min" if mins else "wait a while before retrying"
+                raise RateLimited(f"Rate limited by Instagram on {where} ({when}): {err.get('message', body[:200])}") from None
+            if (e.code >= 500 or err.get("is_transient")) and not last:
+                time.sleep(2 * 2 ** attempt)
+                continue
+            raise IGError(f"HTTP {e.code} on {where}: {body}") from None
+        except URLError as e:
+            if not last:
+                time.sleep(2 * 2 ** attempt)
+                continue
+            raise IGError(f"Network error on {where}: {e.reason}") from None
+
+
+def regain_minutes(headers):
+    """Minutes until Meta lifts throttling, from the X-Business-Use-Case-Usage header (0 if unknown)."""
     try:
-        with urlopen(Request(url, data=data, method=method, headers=headers), timeout=60) as r:
-            return json.load(r)
-    except HTTPError as e:
-        raise IGError(f"HTTP {e.code} on {method} {url.split('?')[0]}: {e.read().decode(errors='replace')}") from None
-    except URLError as e:
-        raise IGError(f"Network error on {method} {url.split('?')[0]}: {e.reason}") from None
+        usage = json.loads((headers or {}).get("X-Business-Use-Case-Usage") or "{}")
+        return max((int(u.get("estimated_time_to_regain_access", 0)) for v in usage.values() for u in v), default=0)
+    except (ValueError, AttributeError, TypeError):
+        return 0
+
+
+def pace(action, gap):
+    """Wait so that `action` runs at most once per `gap` seconds for this account. Returns seconds waited."""
+    stamp = CONFIG_DIR / f".{ACCOUNT}.{action}.last"
+    try:
+        wait = float(stamp.read_text()) + gap - time.time()
+    except (OSError, ValueError):
+        wait = 0
+    if wait > 0:
+        time.sleep(wait)
+    stamp.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+    stamp.write_text(str(time.time()))
+    return max(0, round(wait))
+
+
+def publish_quota_left(creds):
+    r = api("GET", f"{creds['user_id']}/content_publishing_limit", creds, fields="config,quota_usage")
+    d = (r.get("data") or [{}])[0]
+    total = (d.get("config") or {}).get("quota_total", PUBLISH_DAILY_LIMIT)
+    return int(total) - int(d.get("quota_usage", 0))
 
 
 def api(method, path, creds, **params):
@@ -223,15 +279,19 @@ def public_urls(items):
 # ---------- publishing ----------
 
 def wait_finished(creds, container_id):
-    for _ in range(STATUS_POLL_MAX):
+    waited, delay = 0, 3
+    while True:
         r = api("GET", container_id, creds, fields="status_code,status")
         code = r.get("status_code")
         if code == "FINISHED":
             return
         if code in ("ERROR", "EXPIRED"):
             raise IGError(f"Container {container_id} {code}: {r.get('status')}")
-        time.sleep(STATUS_POLL_SECONDS)
-    raise IGError(f"Container {container_id} not ready after {STATUS_POLL_SECONDS * STATUS_POLL_MAX}s")
+        if waited >= STATUS_WAIT_SECONDS:
+            raise IGError(f"Container {container_id} not ready after {waited}s")
+        time.sleep(delay)  # back off: 3, 6, 12, 24, 48, 60, 60... seconds
+        waited += delay
+        delay = min(delay * 2, 60)
 
 
 def media_params(kind, url):
@@ -318,7 +378,10 @@ def publish(creds, post_type, media, caption, row=None):
     for m in media:
         media_kind(m)  # fail fast before opening a tunnel
     cover = row.get("cover", "")
-    files = media + ([cover] if cover and not cover.isdigit() and post_type == "reel" else [])
+    has_cover_file = bool(cover) and not cover.isdigit() and post_type == "reel"
+    if has_cover_file and media_kind(cover) != "image":
+        raise IGError("cover must be a .jpg/.jpeg image or a frame offset in milliseconds")
+    files = media + ([cover] if has_cover_file else [])
     with public_urls(files) as urls:
         cid = build_containers(creds, post_type, media, caption or None, urls, row)
         wait_finished(creds, cid)  # URLs must stay live until FINISHED
@@ -329,6 +392,14 @@ def publish(creds, post_type, media, caption, row=None):
 
 def split_media(s):
     return [m.strip() for m in s.split("|") if m.strip()]
+
+
+def inside(base, rel):
+    """Resolve a calendar file path, refusing anything outside the calendar folder."""
+    p = (base / rel).resolve()
+    if not p.is_relative_to(base.resolve()):
+        raise IGError(f"'{rel}' is outside the calendar folder. Copy it into {base / 'media'}")
+    return p
 
 
 # ---------- media checks ----------
@@ -534,6 +605,11 @@ def validate_rows(rows, base_dir, tz, now=None):
                 problems.append(f"{rid}: {e}")
             if is_url(m):
                 continue
+            try:
+                inside(base_dir, m)
+            except IGError as e:
+                problems.append(f"{rid}: {e}")
+                continue
             f = base_dir / m
             if not f.is_file():
                 problems.append(f"{rid}: media file not found: {m}")
@@ -553,8 +629,32 @@ def validate_rows(rows, base_dir, tz, now=None):
             sizes = {jpeg_size(f) and round(jpeg_size(f)[0] / jpeg_size(f)[1], 2) for f in local_imgs if f.is_file()}
             if len(sizes - {None}) > 1:
                 warnings.append(f"{rid}: carousel images have different ratios; all get cropped to the first one's")
-        if r["cover"] and not r["cover"].isdigit() and not is_url(r["cover"]) and not (base_dir / r["cover"]).is_file():
-            problems.append(f"{rid}: cover file not found: {r['cover']}")
+        cover = r["cover"]
+        if cover and not cover.isdigit():
+            if not cover.lower().split("?")[0].endswith((".jpg", ".jpeg")):
+                problems.append(f"{rid}: cover must be a .jpg/.jpeg or a frame offset in milliseconds")
+            elif not is_url(cover):
+                try:
+                    if not inside(base_dir, cover).is_file():
+                        problems.append(f"{rid}: cover file not found: {cover}")
+                except IGError as e:
+                    problems.append(f"{rid}: {e}")
+    times = []
+    for r in rows:
+        if r["status"] == "scheduled":
+            try:
+                times.append(parse_when(r["publish_at"], tz))
+            except ValueError:
+                pass
+    times.sort()
+    start = 0
+    for end, t in enumerate(times):
+        while t - times[start] >= timedelta(hours=24):
+            start += 1
+        if end - start + 1 > PUBLISH_DAILY_LIMIT:
+            warnings.append(f"More than {PUBLISH_DAILY_LIMIT} posts scheduled within 24h of {times[start]:%Y-%m-%d %H:%M}. "
+                            f"Instagram allows {PUBLISH_DAILY_LIMIT}; the extra posts will wait for quota")
+            break
     return problems, warnings
 
 
@@ -579,22 +679,42 @@ def run_due(csv_path, dry_run=False):
         if not due:
             return {"posted": [], "failed": []}
         creds = maybe_refresh(load_creds())
-        posted, failed = [], []
-        for i in due:
+        posted, failed, waiting = [], [], []
+        try:
+            left = publish_quota_left(creds)
+        except RateLimited as e:
+            return {"posted": [], "failed": [], "waiting": [rows[i]["id"] for i in due], "rate_limited": str(e)}
+        except IGError:
+            left = None  # unknown; let publish surface the real error
+        note = None
+        for n, i in enumerate(due):
             r = rows[i]
-            media = [m if is_url(m) else str(base / m) for m in split_media(r["media"])]
-            cover = r["cover"]
-            row = {**r, "cover": cover if not cover or cover.isdigit() or is_url(cover) else str(base / cover)}
+            if left is not None and left <= 0:
+                note = note or "waiting: daily publishing quota used up, posts on a later run"
+            if note:
+                rows[i] = {**r, "error": note[:500]}  # stays scheduled
+                waiting.append(r["id"])
+                continue
             try:
+                media = [m if is_url(m) else str(inside(base, m)) for m in split_media(r["media"])]
+                cover = r["cover"]
+                row = {**r, "cover": cover if not cover or cover.isdigit() or is_url(cover) else str(inside(base, cover))}
                 res = publish(creds, r["type"], media, r["caption"], row)
                 rows[i] = {**r, "status": "posted", "error": "", **res}
                 posted.append(r["id"])
+                left = None if left is None else left - 1
+            except RateLimited as e:
+                note = f"waiting: {e}"
+                rows[i] = {**r, "error": note[:500]}  # stays scheduled, retried next run
+                waiting.append(r["id"])
             except IGError as e:
                 rows[i] = {**r, "status": "failed", "error": str(e)[:500]}
                 failed.append({"id": r["id"], "error": str(e)})
             # ponytail: write after each post; a crash between publish and this write could repost one row
             write_rows(csv_path, rows)
-        return {"posted": posted, "failed": failed}
+        write_rows(csv_path, rows)
+        return {"posted": posted, "failed": failed, "waiting": waiting,
+                **({"quota_left": left} if left is not None else {})}
 
 
 def render_calendar(rows, tz):
@@ -804,6 +924,12 @@ def cmd_doctor(a):
             c = maybe_refresh(load_creds())
             me = api("GET", "me", c, fields="username,account_type")
             check("auth", True, f"@{me.get('username')} ({me.get('account_type')})")
+            try:
+                left = publish_quota_left(c)
+                check("quota", left > 0, f"{left} posts left in the rolling 24h window",
+                      "Publishing quota used up. Scheduled posts wait and go out automatically", optional=True)
+            except IGError as e:
+                check("quota", False, str(e)[:200], "Wait, then run doctor again", optional=True)
             days = (c["expires_at"] - time.time()) / 86400 if c.get("expires_at") else None
             check("token", days is None or days > 3,
                   f"expires in {days:.0f} days" if days is not None else "refreshes on next run",
@@ -844,7 +970,9 @@ def cmd_comments(a):
 
 
 def cmd_reply(a):
-    out(api("POST", f"{a.comment_id}/replies", load_creds(), message=a.message))
+    creds = load_creds()
+    waited = pace("reply", REPLY_GAP_SECONDS)
+    out({**api("POST", f"{a.comment_id}/replies", creds, message=a.message), "paced_seconds": waited})
 
 
 def cmd_hide(a):

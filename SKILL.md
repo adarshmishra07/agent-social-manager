@@ -150,6 +150,20 @@ These go through the browser at instagram.com, one at a time, at a human pace. N
 
 Confirm exact values with the user before saving. Check the result with `python3 ig.py whoami`.
 
+## Rate limits
+
+Instagram throttles at several levels, and the tool handles each one:
+
+| limit | what ig.py does | what you do |
+|---|---|---|
+| 50 published posts per rolling 24h per account (a carousel counts once) | `run-due` checks the quota first. Rows over the limit stay `scheduled` with `error: waiting: ...` and go out on a later run. `validate` warns when more than 50 fall within 24h | Spread posts out. `ig.py limit` shows usage |
+| API call throttling (HTTP 429, error codes 4, 17, 32, 613, 80002) | Stops immediately with a `Rate limited` error saying when access returns, and never retries in a loop. In `run-due`, unposted rows stay `scheduled` | Wait for the time in the error. Don't rerun commands to "push through" |
+| Temporary Meta errors (5xx, `is_transient`) | Retries reads twice with backoff. Never retries a publish, to avoid double posts | If a publish fails this way, check `ig.py media` before retrying |
+| Comment replies | `reply` waits at least 20 s since the last reply on that account | Reply to a batch of comments at most once an hour, write a different reply each time, and skip replying to every single emoji |
+| Polling | Container status checks back off from 3 s to 60 s | Check comments every 30 to 60 minutes at most, not in a tight loop |
+
+Instagram also blocks actions that look automated (many replies, follows or profile edits in a short time). These blocks aren't in the API docs and can last hours or days, so pace yourself like a busy human would.
+
 ## Troubleshooting
 
 | error | meaning and fix |
@@ -161,3 +175,5 @@ Confirm exact values with the user before saving. Check the result with `python3
 | `INVALID_LOCATION_ID` | That Page has no address. See Location |
 | code 190 / `OAuthException` | The token expired or was revoked. Repeat setup steps 4 and 5 |
 | `Another run-due is already running` | Normal. The previous run is still posting |
+| `Rate limited by Instagram` | See Rate limits. Wait for the time it gives |
+| `outside the calendar folder` | Scheduled posts only use files inside the calendar folder. Copy the file into `media/` |

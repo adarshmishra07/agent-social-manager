@@ -57,7 +57,7 @@ Every command prints JSON. Run `python3 ig.py -h` for details.
 
 ## Limits
 
-- 50 API posts per 24 hours.
+- 50 API posts per 24 hours per account. Extra posts wait for quota instead of failing. API throttling stops the run and says when to retry. Comment replies are spaced 20 s apart.
 - Scheduled posts need the computer on. A post missed while it's asleep goes out on the next run.
 - The API can't add Instagram's music library, story stickers, or edit or delete posts. `SKILL.md` lists a workaround for each.
 
