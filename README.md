@@ -48,6 +48,8 @@ Yes. `schedule install` registers a small background job (launchd on macOS, cron
 
 The catch: the job runs on your computer, so it has to be on, awake and online. A post due while your laptop sleeps goes out a few minutes after it wakes. If you need exact times while traveling, run it on an always-on machine (a home server, a Pi, a cheap VPS). Comments aren't answered automatically.
 
+**It's a local setup.** In a cloud session (such as Claude Code on the web) scheduled posts don't run: the sandbox, the saved token and the schedule disappear when the session ends. Set it up on your own computer.
+
 ## CLI
 
 ```

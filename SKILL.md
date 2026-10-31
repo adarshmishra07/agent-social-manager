@@ -151,6 +151,7 @@ Right after `schedule install`, and whenever the user asks about scheduling, exp
 - Only `scheduled` rows go out. Drafts never do.
 - Comments are not answered automatically. They're handled when the user opens a session and asks.
 - For exact-time posting while traveling or with the laptop closed, run the same skill and calendar folder on an always-on machine (a home server, a Raspberry Pi, a small VPS) and install the schedule there instead.
+- **This is a local setup.** In a cloud session (such as Claude Code on the web), nothing posts on a schedule. The sandbox disappears when the session ends, and so do the saved token and the schedule. Setup also needs a real browser. Tell cloud users up front: set it up on their own computer, and expect posting in the cloud only while the session is open and they ask for it.
 
 `schedule status` shows the next scheduled post and repeats this note.
 
