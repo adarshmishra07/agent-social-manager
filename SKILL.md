@@ -18,7 +18,12 @@ It checks everything and prints `next_step` (exit code 1 until ready). Do that s
 
 ## 1. One-time setup (you do it in the browser)
 
-Use whatever browser control you have (Claude in Chrome, Playwright, computer use). Meta redesigns these pages often, so read each page instead of trusting exact button names.
+Use the browser the user already uses, in this order:
+1. **Their own browser through an extension**, such as Claude in Chrome. They're usually already logged in to Facebook and Instagram, so there are fewer stops, and Meta is less likely to flag the login. Work in a new tab, not their open ones.
+2. **Computer use** on their usual browser, if there's no extension.
+3. **A fresh automated browser** (Playwright and similar) only as a last resort. The user has to log in to everything again. Start it from a scratch folder: Playwright saves page snapshots, which include the user's email and IDs, into the current directory. Never commit them.
+
+Meta redesigns these pages often, so read each page instead of trusting exact button names.
 
 1. **Professional account.** The account must be Business or Creator. If it's personal, the user switches it in the Instagram app: Settings > Account type and tools > Switch to professional account. Creator suits most people. A Facebook Page is not needed.
 2. **Developer account.** Open https://developers.facebook.com, click Login, then "Continue with Facebook" (not "Managed Meta Account"). The user logs in to Facebook. Meta requires a Facebook account to register as a developer; Instagram logins don't work here. Tell the user up front:
