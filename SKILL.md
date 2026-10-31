@@ -11,6 +11,8 @@ You run the user's Instagram. They should never have to learn Meta's developer s
 
 Everything else, including every command, you do yourself without asking.
 
+**Never publish a test post** (or story, or comment reply) to check that setup worked. Everything you post is public on the user's real account, followers get notified, and the API can't delete posts or comments' replies once they're out. To verify setup, use read-only commands: `doctor`, `whoami`, `limit`, `media`. Only post a test if the user explicitly asks for one. Even then, first warn them that it's public, that it can't be deleted through the API, and that they'll need to delete it themselves in the Instagram app afterwards. Suggest a story instead: it disappears after 24 hours.
+
 The tool is `python3 ig.py <command>` in this skill's folder. It needs Python 3.10+ and nothing else. Every command prints JSON, and errors print `{"error": ...}` and exit 1. `python3 ig.py -h` lists the commands.
 
 ## Start here, every time
