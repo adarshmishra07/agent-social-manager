@@ -34,7 +34,7 @@ Use the browser the user already uses, in this order:
 2. **Computer use** on their usual browser, if there's no extension.
 3. **A fresh automated browser** (Playwright and similar) only as a last resort. The user has to log in to Facebook and Instagram again in that window, and Instagram often blocks logins there. If it does, switch to their normal browser for the rest of setup. Start it from a scratch folder: Playwright saves page snapshots, which include the user's email and IDs, into the current directory. Never commit them.
 
-**Every setup is different.** Meta's flow changes with the app's age (newer apps get "Unified login"), the Facebook account's age, how many business portfolios the user has, their region, and whatever Meta redesigned last week. The steps below are a map of one verified run, not a script. What matters is the goal:
+**Every setup is different.** `references/meta-setup-walkthrough.md` has the exact screens from the last verified run; read it before you start. Meta's flow changes with the app's age (newer apps get "Unified login"), the Facebook account's age, how many business portfolios the user has, their region, and whatever Meta redesigned last week. The steps below are a map of one verified run, not a script. What matters is the goal:
 
 > An app in development mode, with the user's Instagram account connected, and a token that can publish and manage comments. Saved with `ig.py auth`, and `doctor` says `ready`.
 
