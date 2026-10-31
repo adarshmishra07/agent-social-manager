@@ -33,7 +33,7 @@ Meta redesigns these pages often, so read each page instead of trusting exact bu
 1. **Professional account.** The account must be Business or Creator. If it's personal, the user switches it in the Instagram app: Settings > Account type and tools > Switch to professional account. Creator suits most people. A Facebook Page is not needed.
 2. **Developer account.** Open https://developers.facebook.com, click Login, then "Continue with Facebook" (not "Managed Meta Account"). The user logs in to Facebook. Meta requires a Facebook account to register as a developer; Instagram logins don't work here. Tell the user up front:
    - Their normal Facebook account is fine. It only owns the private developer app. Nothing gets posted to Facebook, and their friends and pages aren't involved.
-   - If they have no Facebook account, they create one at facebook.com first (free, a few minutes). There's no way around this.
+   - If they have no Facebook account, they create one at facebook.com first (free, a few minutes). There's no way around this. A brand-new Facebook account can run into extra checks or locked features during developer registration, so an established account is the smoother path.
    - The Instagram account(s) they want managed connect separately with Instagram's own login in step 5.
 
    If the user isn't a developer yet, the header shows "Get Started" instead of "My Apps" (and /apps/ quietly redirects to the home page). Registration starts with accepting Meta's Platform Terms, so it's the user's step: they click "Get Started" and go through Register > Verify account (phone or email code) > Contact info > About you, until the Apps page loads.
