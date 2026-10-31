@@ -406,10 +406,16 @@ def publish(creds, post_type, media, caption, row=None):
     if has_cover_file and media_kind(cover) != "image":
         raise IGError("cover must be a .jpg/.jpeg image or a frame offset in milliseconds")
     files = media + ([cover] if has_cover_file else [])
+    local = [f for f in files if not is_url(f)]
+    if local:
+        progress(f"making {len(local)} local file(s) reachable for Instagram")
     with public_urls(files) as urls:
+        progress("creating the post on Instagram")
         cid = build_containers(creds, post_type, media, caption or None, urls, row)
+        progress("waiting for Instagram to process the media (often 1-2 minutes)")
         wait_finished(creds, cid)  # URLs must stay live until FINISHED
         mid = api("POST", f"{creds['user_id']}/media_publish", creds, creation_id=cid)["id"]
+    progress("published")
     permalink = api("GET", mid, creds, fields="permalink").get("permalink", "")
     return {"ig_media_id": mid, "permalink": permalink}
 
@@ -783,6 +789,21 @@ border-radius:8px;padding:12px;margin-bottom:8px}} .card img{{width:72px;height:
 
 # ---------- scheduling ----------
 
+def temp_warning(path):
+    """Scheduled jobs outlive temp folders; a skill run from one breaks silently when it's cleaned."""
+    p = str(Path(path).resolve())
+    temps = {str(Path(tempfile.gettempdir()).resolve()), "/tmp", "/private/tmp", "/var/tmp", "/private/var/folders"}
+    if any(p == t or p.startswith(t.rstrip("/") + "/") for t in temps):
+        return (f"{path} is in a temporary folder that the system cleans up, which would silently break scheduled "
+                f"posts. Install the skill and calendar in a permanent folder first.")
+    return None
+
+
+def progress(msg):
+    """One line to stderr so a slow publish doesn't look hung. stdout stays pure JSON."""
+    print(f"[ig] {msg}", file=sys.stderr, flush=True)
+
+
 def tcc_warning(path):
     if sys.platform != "darwin":
         return None
@@ -837,6 +858,8 @@ def schedule(action, csv_path, force=False, account="default"):
         if not csv_path.exists():
             raise IGError(f"{csv_path} not found. Run `ig.py init` first.")
         for p in (csv_path, script):
+            if temp_warning(p):
+                raise IGError(temp_warning(p))
             warn = tcc_warning(p)
             if warn and not force:
                 raise IGError(warn + " (Or grant Full Disk Access to Python and pass --force.)")
@@ -965,8 +988,9 @@ def cmd_validate(a):
 
 
 def cmd_calendar(a):
-    Path(a.out).write_text(render_calendar(read_rows(a.csv), get_tz()), encoding="utf-8")
-    out({"written": str(Path(a.out).resolve())})
+    dest = Path(a.out) if a.out else Path(a.csv).resolve().parent / "calendar.html"  # next to the CSV by default
+    dest.write_text(render_calendar(read_rows(a.csv), get_tz()), encoding="utf-8")
+    out({"written": str(dest.resolve())})
 
 
 def cmd_schedule(a):
@@ -1099,7 +1123,7 @@ def main(argv=None):
 
     add("run-due", cmd_run_due, "Publish scheduled rows that are due", csv_arg=True).add_argument("--dry-run", action="store_true")
     add("validate", cmd_validate, "Check the CSV for problems", csv_arg=True)
-    add("calendar", cmd_calendar, "Render the CSV to an HTML calendar", csv_arg=True).add_argument("--out", default="calendar.html")
+    add("calendar", cmd_calendar, "Render the CSV to an HTML calendar", csv_arg=True).add_argument("--out", help="Default: calendar.html next to the CSV")
     s = add("schedule", cmd_schedule, "Install, remove, or check the every-5-minutes run-due job", csv_arg=True)
     s.add_argument("action", choices=["install", "remove", "status"])
     s.add_argument("--force", action="store_true", help="Install even if macOS may block the folder")

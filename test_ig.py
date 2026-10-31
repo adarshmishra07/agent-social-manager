@@ -589,6 +589,32 @@ class UnifiedLogin(unittest.TestCase):
         self.assertEqual(ig.token_login("IGAAxyz"), "instagram")
 
 
+class E2EFixes(unittest.TestCase):
+    def test_schedule_refuses_temp_folders(self):
+        with tempfile.TemporaryDirectory() as d:
+            path = Path(d, "content.csv")
+            ig.write_rows(str(path), [])
+            with self.assertRaises(ig.IGError) as cm:
+                ig.schedule("install", path)
+        self.assertIn("temporary folder", str(cm.exception))
+
+    def test_calendar_lands_next_to_csv(self):
+        with tempfile.TemporaryDirectory() as d, mock.patch("sys.stdout"), \
+             mock.patch.object(ig, "CONFIG_DIR", Path(d, "cfg")):
+            path = Path(d, "cal", "content.csv")
+            path.parent.mkdir()
+            ig.write_rows(str(path), [])
+            ig.main(["calendar", "--csv", str(path)])
+            self.assertTrue(Path(d, "cal", "calendar.html").exists())
+
+    def test_publish_progress_goes_to_stderr_only(self):
+        api = Publish.fake_api(None, [])
+        with mock.patch.object(ig, "api", api), mock.patch("sys.stderr") as err, mock.patch("sys.stdout") as so:
+            ig.publish({"user_id": "U"}, "image", ["https://h/a.jpg"], "")
+        self.assertIn("published", "".join(c.args[0] for c in err.write.call_args_list))
+        so.write.assert_not_called()
+
+
 class Tunnel(unittest.TestCase):
     @unittest.skipUnless(ig.find_cloudflared() and os.environ.get("IG_TEST_TUNNEL"), "set IG_TEST_TUNNEL=1")
     def test_serves_file_publicly(self):

@@ -78,7 +78,7 @@ So:
    When the user copied the token in their browser, read it from the clipboard yourself: `pbpaste | python3 ig.py auth ...` on macOS, `xclip -o -selection clipboard | ...` or `wl-paste | ...` on Linux. Never ask the user to paste the token into the chat, and never echo it. Afterwards, tell them to copy something else so the token leaves their clipboard.
    The app stays in development mode. That's correct: it only serves this one account, so it never needs App Review.
 7. **Timezone.** Ask the user which timezone the posting times should follow (usually where their audience is), and set it: `python3 ig.py config --timezone Asia/Kolkata`. This works before `auth`, so do it while waiting on the user. Calendar times stay in that zone even when the user travels.
-8. **Folder.** `python3 ig.py init --dir ~/instagram` creates `content.csv` and `media/`. On macOS, don't use Desktop, Documents or Downloads: the system blocks background jobs from reading them.
+8. **Folder.** `python3 ig.py init --dir ~/instagram` creates `content.csv` and `media/`. Keep both the skill and this folder somewhere permanent (not /tmp or a scratch dir): the schedule points at both, and `schedule install` refuses temp folders. On macOS, don't use Desktop, Documents or Downloads: the system blocks background jobs from reading them.
 9. **Tools.** `brew install cloudflared ffmpeg`, or the Linux equivalent. You need cloudflared to post local files reliably (see Media hosting) and ffmpeg to check, fix and add music to videos.
 10. **Schedule.** `python3 ig.py schedule install --csv ~/instagram/content.csv` runs `run-due` every 5 minutes, using launchd on macOS and cron on Linux. `schedule status` and `schedule remove` do what they say.
 
@@ -107,7 +107,7 @@ Token lifetime: Unified login (EAA) system-user tokens don't expire. Instagram l
 Rules:
 - New ideas go in as `draft`. Only switch a row to `scheduled` after the user approves it, unless they told you to post without asking.
 - After every edit, run `python3 ig.py validate`. `problems` block posting. `warnings` are advice.
-- `python3 ig.py calendar` writes `calendar.html` for the user. Regenerate it after edits.
+- `python3 ig.py calendar` writes `calendar.html` next to the CSV for the user. Regenerate it after edits.
 - To retry a failed row, read its `error`, fix the cause, and set it back to `scheduled`.
 - To post right away: `python3 ig.py post --type image --media a.jpg --caption "..."`. All the column options exist as flags, like `--location-id` and `--alt-text`.
 - **Google Sheets:** if the user prefers a Sheet and you have a Sheets connector, they can edit the Sheet. Sync it into `content.csv` before posting times and copy the status columns back after. The scheduler only reads the CSV, because it runs when you aren't there.
@@ -136,6 +136,8 @@ ffmpeg -i in.mov -c:v libx264 -crf 20 -preset slow -pix_fmt yuv420p -r 30 \
   -c:a aac -b:a 128k -ar 48000 -movflags +faststart out.mp4  # reel-safe video
 ffmpeg -i in.mp4 -c:v libx264 -crf 26 -c:a aac -b:a 128k -movflags +faststart smaller.mp4      # shrink file size
 ```
+
+**Making images with text:** Homebrew's ffmpeg often lacks the `drawtext` filter. Use Python's Pillow if it's installed, or ask the user for designed images. Publishing prints progress lines to stderr (`[ig] ...`). A post usually takes 1-2 minutes.
 
 **Media hosting.** Instagram downloads media from a public URL. It can't take a file from disk. When cloudflared is installed, `ig.py` opens a temporary Cloudflare tunnel that serves only that post's files until Instagram finishes downloading them, then closes it. Without cloudflared it uploads to litterbox.catbox.moe, a free host where files expire after 1 hour (less reliable). An `https://` link in the media column is used as is. Google Drive links don't work: Meta rejects them.
 
