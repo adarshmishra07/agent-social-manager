@@ -14,7 +14,9 @@ Then tell your agent: **"manage my Instagram"**.
 
 It runs `python3 ig.py doctor`, which reports what's missing and what to do next, and works through the list. It creates your Meta app in the browser, connects your account, saves the token, asks your timezone, creates a calendar folder and installs the scheduler. You log in, pass any phone check and click Allow. Nothing else.
 
-Your Instagram needs to be a Business or Creator account (free; switching takes a minute in the app). You don't need a Facebook Page.
+You need:
+- An Instagram Business or Creator account (free; switching takes a minute in the app).
+- A Facebook account to own the Meta developer app. Meta requires one. Your normal account is fine: nothing gets posted to Facebook, and it isn't linked to your Instagram. You don't need a Facebook Page.
 
 For agents other than Claude Code, clone it wherever they load skills from, or point them at `SKILL.md`.
 
