@@ -222,17 +222,20 @@ def find_cloudflared():
         (p for p in ("/opt/homebrew/bin/cloudflared", "/usr/local/bin/cloudflared") if os.path.exists(p)), None)
 
 
-def wait_reachable(url, timeout=90):
+def wait_reachable(url, timeout=30):
+    """Best effort. This machine's DNS can cache a brand-new tunnel name as missing for minutes while the rest of
+    the internet (Meta included) already resolves it, so failing here is a warning, not an error."""
     deadline = time.time() + timeout
     while time.time() < deadline:
         try:
             with urlopen(Request(url, method="HEAD"), timeout=10) as r:
                 if r.status == 200:
-                    return
+                    return True
         except (HTTPError, URLError, TimeoutError, OSError):
             pass
         time.sleep(3)
-    raise IGError(f"Tunnel URL never became reachable: {url}")
+    progress("couldn't reach the tunnel from this computer (often just local DNS caching); continuing")
+    return False
 
 
 @contextlib.contextmanager
@@ -250,15 +253,17 @@ def tunnel(local_paths):
                                  f"http://127.0.0.1:{server.server_address[1]}"],
                                 stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True)
         try:
-            base, deadline = None, time.time() + 60
-            while not base and time.time() < deadline:
+            base, registered, deadline = None, False, time.time() + 60
+            while not registered and time.time() < deadline:  # URL first, then a live edge connection
                 line = proc.stderr.readline()
                 if not line and proc.poll() is not None:
                     break
                 m = re.search(r"https://[a-z0-9-]+\.trycloudflare\.com", line)
-                base = m and m.group(0)
+                base = base or (m and m.group(0))
+                registered = bool(base) and "Registered tunnel connection" in line
             if not base:
                 raise IGError("cloudflared did not return a tunnel URL")
+            time.sleep(3)  # let the new hostname propagate before anything (including us) looks it up
             threading.Thread(target=proc.stderr.read, daemon=True).start()  # drain so it never blocks
             urls = {p: f"{base}/{n}" for p, n in names.items()}
             for u in urls.values():
@@ -1102,6 +1107,12 @@ def cmd_comments(a):
             fields="id,text,username,timestamp,hidden,replies{id,text,username,timestamp}"))
 
 
+def cmd_comment(a):
+    creds = load_creds()
+    waited = pace("reply", REPLY_GAP_SECONDS)  # same pacing as replies: both look like account activity
+    out({**api("POST", f"{a.media_id}/comments", creds, message=a.message), "paced_seconds": waited})
+
+
 def cmd_reply(a):
     creds = load_creds()
     waited = pace("reply", REPLY_GAP_SECONDS)
@@ -1165,6 +1176,9 @@ def main(argv=None):
     s = add("comments", cmd_comments, "List comments on a post")
     s.add_argument("media_id")
     s.add_argument("--limit", type=int, default=50)
+    s = add("comment", cmd_comment, "Write a comment on one of the account's posts (e.g. a first comment)")
+    s.add_argument("media_id")
+    s.add_argument("message")
     s = add("reply", cmd_reply, "Reply to a comment")
     s.add_argument("comment_id")
     s.add_argument("message")

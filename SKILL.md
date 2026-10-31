@@ -178,6 +178,7 @@ This tool can't attach songs from Instagram's music library. Meta's licensed-mus
 ```
 python3 ig.py media --limit 10            # recent posts with comment counts
 python3 ig.py comments <media_id>         # comments with replies
+python3 ig.py comment <media_id> "text"  # a new comment on the user's own post
 python3 ig.py reply <comment_id> "text"
 python3 ig.py hide <comment_id>           # --unhide to undo
 python3 ig.py delete-comment <comment_id> # only on the user's own posts
