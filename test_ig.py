@@ -541,9 +541,24 @@ class Notes(unittest.TestCase):
              mock.patch("sys.stdout"):
             for i in range(12):
                 ig.main(["note", f"lesson  {i}\nsecond line"])
+            ig.main(["note", "other account lesson", "--account", "shop"])
+            with self.assertRaises(SystemExit):
+                ig.main(["note", "x" * 301])
             notes = ig.recent_notes()
         self.assertEqual(len(notes), 10)
         self.assertTrue(notes[-1].endswith("[default] lesson 11 second line"))
+        self.assertFalse(any("other account" in n for n in notes))
+
+    def test_config_before_auth_then_auth_keeps_it(self):
+        with tempfile.TemporaryDirectory() as d, mock.patch.object(ig, "CONFIG_DIR", Path(d)), \
+             mock.patch.dict(os.environ, {"IG_TOKEN": "T"}), mock.patch("sys.stdout"):
+            os.environ.pop("IG_CREDENTIALS", None)
+            ig.main(["config", "--timezone", "Europe/London"])
+            with mock.patch.object(ig, "http_json", side_effect=[{"user_id": "U", "username": "u"},
+                                                                 {"access_token": "T2", "expires_in": 100}]):
+                ig.main(["auth"])
+            c = ig.json.loads(Path(d, "credentials.json").read_text())
+        self.assertEqual((c["timezone"], c["timezone_confirmed"], c["access_token"]), ("Europe/London", True, "T2"))
 
 
 class Tunnel(unittest.TestCase):
