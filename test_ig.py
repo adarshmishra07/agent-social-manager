@@ -615,6 +615,16 @@ class E2EFixes(unittest.TestCase):
         so.write.assert_not_called()
 
 
+class NextPost(unittest.TestCase):
+    def test_next_scheduled_row(self):
+        with tempfile.TemporaryDirectory() as d, mock.patch.object(ig, "get_tz", lambda: ZoneInfo("UTC")):
+            path = Path(d, "content.csv")
+            ig.write_rows(str(path), [row(id="a", status="draft", publish_at="2026-11-01 08:00"),
+                                      row(id="b", status="scheduled", publish_at="2026-11-03 09:00"),
+                                      row(id="c", status="scheduled", publish_at="2026-11-02 09:00")])
+            self.assertEqual(ig.next_post(path), {"id": "c", "at": "2026-11-02 09:00 UTC"})
+
+
 class Tunnel(unittest.TestCase):
     @unittest.skipUnless(ig.find_cloudflared() and os.environ.get("IG_TEST_TUNNEL"), "set IG_TEST_TUNNEL=1")
     def test_serves_file_publicly(self):

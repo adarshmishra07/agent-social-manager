@@ -42,6 +42,12 @@ For agents other than Claude Code, clone it wherever they load skills from, or p
 - **Local files just work.** Instagram only downloads media from a public URL. `ig.py` opens a temporary Cloudflare tunnel for the minute it takes to publish, and it serves only that post's files. No account needed. Without `cloudflared` it falls back to a free 1-hour file host.
 - **Checks before posting.** `validate` rejects files Instagram would reject: fake JPEGs, 3:4 images, wrong video codecs, more than 30 hashtags, a 9 MB image.
 
+## Does it post when Claude is closed?
+
+Yes. `schedule install` registers a small background job (launchd on macOS, cron on Linux). Every 5 minutes it posts any `scheduled` row that's due. Claude only plans posts, gets your approval and answers comments.
+
+The catch: the job runs on your computer, so it has to be on, awake and online. A post due while your laptop sleeps goes out a few minutes after it wakes. If you need exact times while traveling, run it on an always-on machine (a home server, a Pi, a cheap VPS). Comments aren't answered automatically.
+
 ## CLI
 
 ```

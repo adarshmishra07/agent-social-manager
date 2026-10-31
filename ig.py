@@ -868,7 +868,33 @@ def schedule(action, csv_path, force=False, account="default"):
         cmd += ["--account", account]
     log = str(csv_path.parent / "ig.log")
     fn = schedule_launchd if sys.platform == "darwin" else schedule_cron
-    return {"account": account, **fn(action, cmd, log, schedule_label(account))}
+    res = {"account": account, **fn(action, cmd, log, schedule_label(account))}
+    if res["installed"]:
+        res["next_post"] = next_post(csv_path)
+        res["how_it_works"] = AUTOPOST_NOTE
+    return res
+
+
+AUTOPOST_NOTE = ("Posts go out from this computer every 5 minutes, even with Claude closed. The computer must be on, "
+                 "awake, logged in and online; posts missed while it sleeps go out a few minutes after it wakes. "
+                 "Only rows with status 'scheduled' are posted. Comments are not answered automatically.")
+
+
+def next_post(csv_path):
+    if not Path(csv_path).exists():
+        return None
+    tz = get_tz()
+    upcoming = []
+    for r in read_rows(csv_path):
+        if r["status"] == "scheduled":
+            try:
+                upcoming.append((parse_when(r["publish_at"], tz), r["id"]))
+            except ValueError:
+                pass
+    if not upcoming:
+        return None
+    when, rid = min(upcoming)
+    return {"id": rid, "at": when.astimezone(tz).strftime("%Y-%m-%d %H:%M %Z")}
 
 
 # ---------- commands ----------

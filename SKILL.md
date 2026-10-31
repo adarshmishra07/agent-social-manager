@@ -141,6 +141,17 @@ ffmpeg -i in.mp4 -c:v libx264 -crf 26 -c:a aac -b:a 128k -movflags +faststart sm
 
 **Media hosting.** Instagram downloads media from a public URL. It can't take a file from disk. When cloudflared is installed, `ig.py` opens a temporary Cloudflare tunnel that serves only that post's files until Instagram finishes downloading them, then closes it. Without cloudflared it uploads to litterbox.catbox.moe, a free host where files expire after 1 hour (less reliable). An `https://` link in the media column is used as is. Google Drive links don't work: Meta rejects them.
 
+## 3b. How autoposting works (tell the user)
+
+Right after `schedule install`, and whenever the user asks about scheduling, explain this in plain words:
+- Posts go out from **their computer** every 5 minutes, even with Claude closed. Claude is only needed to plan, approve and answer comments.
+- The computer has to be **on, awake, logged in and online**. A sleeping laptop doesn't post. Posts missed while it sleeps go out a few minutes after it wakes, so they're late, not lost.
+- Only `scheduled` rows go out. Drafts never do.
+- Comments are not answered automatically. They're handled when the user opens a session and asks.
+- For exact-time posting while traveling or with the laptop closed, run the same skill and calendar folder on an always-on machine (a home server, a Raspberry Pi, a small VPS) and install the schedule there instead.
+
+`schedule status` shows the next scheduled post and repeats this note.
+
 ## 4. Music
 
 The API can't attach songs from Instagram's music library. Meta only offers that with Facebook Login and a linked Page, and this tool uses Instagram Login. You also can't add music after posting. So pick a route per reel:
