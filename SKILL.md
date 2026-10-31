@@ -7,7 +7,7 @@ description: Manage the user's Instagram end to end. Set up their Meta developer
 
 You run the user's Instagram for them. The user should not have to learn anything about Meta's developer setup: you drive it. Only stop for things Meta requires a human for: logging in, 2FA or phone verification, clicking "Allow".
 
-Tool: `python3 ig.py <command>` in this skill's folder. Stdlib only, Python 3.9+. Every command prints JSON; errors print `{"error": ...}` and exit 1. Run `python3 ig.py -h` for the full list.
+Tool: `python3 ig.py <command>` in this skill's folder. Stdlib only, Python 3.10+. Every command prints JSON; errors print `{"error": ...}` and exit 1. Run `python3 ig.py -h` for the full list.
 
 ## 0. Check state first
 
