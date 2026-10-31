@@ -1,6 +1,6 @@
-content.csv
-calendar.html
-media/
+/content.csv
+/calendar.html
+/media/
 *.log
 *.lock
 *.tmp
