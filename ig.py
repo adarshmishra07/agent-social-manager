@@ -55,10 +55,11 @@ def load_creds():
 
 
 def save_creds(creds):
-    CREDS.parent.mkdir(parents=True, exist_ok=True)
+    CREDS.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
     tmp = CREDS.with_suffix(".tmp")
-    tmp.write_text(json.dumps(creds, indent=2))
-    os.chmod(tmp, 0o600)
+    tmp.unlink(missing_ok=True)
+    with os.fdopen(os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600), "w") as f:
+        f.write(json.dumps(creds, indent=2))  # created 0600, never readable by others
     tmp.replace(CREDS)
 
 
