@@ -535,6 +535,17 @@ class Accounts(unittest.TestCase):
         self.assertNotIn("a", lines)
 
 
+class Notes(unittest.TestCase):
+    def test_notes_are_saved_and_shown(self):
+        with tempfile.TemporaryDirectory() as d, mock.patch.object(ig, "CONFIG_DIR", Path(d)), \
+             mock.patch("sys.stdout"):
+            for i in range(12):
+                ig.main(["note", f"lesson  {i}\nsecond line"])
+            notes = ig.recent_notes()
+        self.assertEqual(len(notes), 10)
+        self.assertTrue(notes[-1].endswith("[default] lesson 11 second line"))
+
+
 class Tunnel(unittest.TestCase):
     @unittest.skipUnless(ig.find_cloudflared() and os.environ.get("IG_TEST_TUNNEL"), "set IG_TEST_TUNNEL=1")
     def test_serves_file_publicly(self):

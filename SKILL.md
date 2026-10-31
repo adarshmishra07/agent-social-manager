@@ -167,6 +167,19 @@ Instagram throttles at several levels, and the tool handles each one:
 
 Instagram also blocks actions that look automated (many replies, follows or profile edits in a short time). These blocks aren't in the API docs and can last hours or days, so pace yourself like a busy human would.
 
+## Learn from mistakes
+
+`doctor` prints `field_notes`: lessons saved in earlier sessions on this machine. Read them before you act and follow them.
+
+When something surprises you, save one line so the next session skips the mistake:
+```
+python3 ig.py note "Meta app dashboard now calls it 'Instagram API' not 'API setup with Instagram login'"
+python3 ig.py note "Brand reels: user wants captions under 150 chars, no hashtags"
+```
+That covers a Meta screen that differs from this file, an error the troubleshooting table doesn't explain, or a preference the user told you. Keep notes factual. Never put tokens, passwords or personal data in them.
+
+If this file was wrong, tell the user and offer to open an issue at https://github.com/adarshmishra07/agent-social-manager/issues with what you saw and the fix. Every user gets the correction.
+
 ## Troubleshooting
 
 | error | meaning and fix |

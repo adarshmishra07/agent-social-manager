@@ -862,6 +862,29 @@ def cmd_init(a):
     out({"csv": str(csv_path), "media_dir": str(d / "media"), **({"warning": warn} if warn else {})})
 
 
+def notes_path():
+    return CONFIG_DIR / "field-notes.md"
+
+
+def recent_notes(n=10):
+    try:
+        lines = [l for l in notes_path().read_text().splitlines() if l.startswith("- ")]
+    except OSError:
+        return []
+    return lines[-n:]
+
+
+def cmd_note(a):
+    text = " ".join(a.text.split())
+    if not text:
+        raise IGError("Note is empty")
+    path = notes_path()
+    path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+    with open(path, "a", encoding="utf-8") as f:
+        f.write(f"- {datetime.now():%Y-%m-%d} [{ACCOUNT}] {text}\n")
+    out({"saved": str(path), "recent": recent_notes()})
+
+
 def cmd_accounts(a):
     found = []
     for f in sorted(CONFIG_DIR.glob("*.json")):
@@ -960,7 +983,8 @@ def cmd_doctor(a):
     check("cloudflared", cf, cf or "missing", "Install cloudflared (brew install cloudflared). Without it local "
           "media goes through litterbox.catbox.moe, a free host with no uptime promise", optional=True)
     fails = [c for c in checks if not c["ok"] and not c.get("optional")]
-    out({"ready": not fails, "next_step": fails[0]["fix"] if fails else None, "checks": checks})
+    out({"ready": not fails, "next_step": fails[0]["fix"] if fails else None, "checks": checks,
+         "field_notes": recent_notes()})
     if fails:
         sys.exit(1)
 
@@ -1012,6 +1036,7 @@ def main(argv=None):
     add("doctor", cmd_doctor, "Check setup and print the next step", csv_arg=True)
     add("auth", cmd_auth, "Save a token read from stdin or IG_TOKEN")
     add("accounts", cmd_accounts, "List connected accounts")
+    add("note", cmd_note, "Save a lesson for future sessions (shown by doctor)").add_argument("text")
     add("config", cmd_config, "Show settings, or set --timezone").add_argument("--timezone", help="IANA name, e.g. Asia/Kolkata")
     add("init", cmd_init, "Create content.csv and media/ in a folder").add_argument("--dir", default=".")
     add("whoami", cmd_whoami, "Show the connected account")
