@@ -1,0 +1,9 @@
+content.csv
+calendar.html
+media/
+*.log
+*.lock
+*.tmp
+__pycache__/
+.DS_Store
+credentials.json
