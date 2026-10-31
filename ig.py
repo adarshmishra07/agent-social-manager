@@ -397,7 +397,9 @@ def build_containers(creds, post_type, media, caption, urls, row):
     raise IGError(f"Unknown type '{post_type}'. Use image, carousel, reel, story.")
 
 
-def publish(creds, post_type, media, caption, row=None):
+def publish(creds, post_type, media, caption, row=None, check=False):
+    """Create the post on Instagram and publish it. check=True stops before publishing: Instagram downloads and
+    validates everything, but nothing goes live (the unpublished container expires on its own after 24h)."""
     row = row or {}
     for m in media:
         media_kind(m)  # fail fast before opening a tunnel
@@ -414,6 +416,9 @@ def publish(creds, post_type, media, caption, row=None):
         cid = build_containers(creds, post_type, media, caption or None, urls, row)
         progress("waiting for Instagram to process the media (often 1-2 minutes)")
         wait_finished(creds, cid)  # URLs must stay live until FINISHED
+        if check:
+            progress("check passed; nothing was published")
+            return {"checked": True, "published": False}
         mid = api("POST", f"{creds['user_id']}/media_publish", creds, creation_id=cid)["id"]
     progress("published")
     permalink = api("GET", mid, creds, fields="permalink").get("permalink", "")
@@ -999,7 +1004,7 @@ def cmd_refresh(a):
 def cmd_post(a):
     row = {"type": a.type, "location_id": a.location_id, "collaborators": a.collaborators, "user_tags": a.user_tags,
            "alt_text": a.alt_text, "cover": a.cover, "extra": a.extra}
-    out(publish(maybe_refresh(load_creds()), a.type, split_media(a.media), a.caption, row))
+    out(publish(maybe_refresh(load_creds()), a.type, split_media(a.media), a.caption, row, check=a.check))
 
 
 def cmd_run_due(a):
@@ -1144,6 +1149,8 @@ def main(argv=None):
     s.add_argument("--type", required=True, choices=["image", "carousel", "reel", "story"])
     s.add_argument("--media", required=True, help="Paths or URLs, separated by |")
     s.add_argument("--caption", default="")
+    s.add_argument("--check", action="store_true",
+                   help="Let Instagram fully validate the post (download, format, options) without publishing it")
     for col in ("location_id", "collaborators", "user_tags", "alt_text", "cover", "extra"):
         s.add_argument(f"--{col.replace('_', '-')}", dest=col, default="", help="Same format as the CSV column")
 

@@ -11,7 +11,7 @@ You run the user's Instagram. They should never have to learn Meta's developer s
 
 Everything else, including every command, you do yourself without asking.
 
-**Never publish a test post** (or story, or comment reply) to check that setup worked. Everything you post is public on the user's real account, followers get notified, and the API can't delete posts or comments' replies once they're out. To verify setup, use read-only commands: `doctor`, `whoami`, `limit`, `media`. Only post a test if the user explicitly asks for one. Even then, first warn them that it's public, that it can't be deleted through the API, and that they'll need to delete it themselves in the Instagram app afterwards. Suggest a story instead: it disappears after 24 hours.
+**Never publish a test post** (or story, or comment reply) to check that setup worked. Everything you post is public on the user's real account, followers get notified, and the API can't delete posts or comments' replies once they're out. To verify setup, use read-only commands (`doctor`, `whoami`, `limit`, `media`), or `post --check`, which validates a real post on Instagram's side without publishing it. Only post a test if the user explicitly asks for one. Even then, first warn them that it's public, that it can't be deleted through the API, and that they'll need to delete it themselves in the Instagram app afterwards. Suggest a story instead: it disappears after 24 hours.
 
 The tool is `python3 ig.py <command>` in this skill's folder (use its full path when you run it from elsewhere). It needs Python 3.10+ and nothing else. Every command prints JSON, and errors print `{"error": ...}` and exit 1. `python3 ig.py -h` lists the commands.
 
@@ -112,6 +112,7 @@ Rules:
 - `python3 ig.py calendar` writes `calendar.html` next to the CSV for the user. Regenerate it after edits.
 - To retry a failed row, read its `error`, fix the cause, and set it back to `scheduled`.
 - To post right away: `python3 ig.py post --type image --media a.jpg --caption "..."`. All the column options exist as flags, like `--location-id` and `--alt-text`.
+- **Check without posting:** add `--check` to `post`. Instagram downloads and validates everything (media format, ratio, codec, location, tags, collaborators) but nothing goes live. Use it on a new kind of post or a new location before its scheduled time, and to prove setup works when the user wants more than `doctor`.
 - **Google Sheets:** if the user prefers a Sheet and you have a Sheets connector, they can edit the Sheet. Sync it into `content.csv` before posting times and copy the status columns back after. The scheduler only reads the CSV, because it runs when you aren't there.
 
 Before you write any posts, read `references/post-playbook.md`. It covers sizes, hooks, captions, hashtags and cadence.

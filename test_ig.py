@@ -625,6 +625,16 @@ class NextPost(unittest.TestCase):
             self.assertEqual(ig.next_post(path), {"id": "c", "at": "2026-11-02 09:00 UTC"})
 
 
+class CheckMode(unittest.TestCase):
+    def test_check_never_calls_media_publish(self):
+        calls = []
+        with mock.patch.object(ig, "api", Publish.fake_api(None, calls)), mock.patch("sys.stderr"):
+            res = ig.publish({"user_id": "U"}, "carousel", ["https://h/a.jpg", "https://h/b.mp4"], "c", check=True)
+        self.assertEqual(res, {"checked": True, "published": False})
+        self.assertFalse(any(path.endswith("media_publish") for _, path, _ in calls))
+        self.assertEqual(len([c for c in calls if c[1] == "U/media"]), 3)  # 2 children + carousel, all validated
+
+
 class Tunnel(unittest.TestCase):
     @unittest.skipUnless(ig.find_cloudflared() and os.environ.get("IG_TEST_TUNNEL"), "set IG_TEST_TUNNEL=1")
     def test_serves_file_publicly(self):
