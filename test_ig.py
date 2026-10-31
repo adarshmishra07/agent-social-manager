@@ -453,11 +453,11 @@ class RateLimits(unittest.TestCase):
     def test_validate_warns_over_50_in_24h(self):
         tz = ZoneInfo("UTC")
         rows = [row(id=str(i), status="scheduled", type="image", media="https://h/a.jpg",
-                    publish_at=f"2026-11-02 {i // 60:02d}:{i % 60:02d}") for i in range(51)]
+                    publish_at=f"2026-11-02 {i // 60:02d}:{i % 60:02d}") for i in range(101)]
         _, warnings = ig.validate_rows(rows, Path("."), tz, datetime(2026, 11, 1, tzinfo=tz))
-        self.assertTrue(any("More than 50" in w for w in warnings))
-        _, warnings = ig.validate_rows(rows[:50], Path("."), tz, datetime(2026, 11, 1, tzinfo=tz))
-        self.assertFalse(any("More than 50" in w for w in warnings))
+        self.assertTrue(any("More than 100" in w for w in warnings))
+        _, warnings = ig.validate_rows(rows[:100], Path("."), tz, datetime(2026, 11, 1, tzinfo=tz))
+        self.assertFalse(any("More than 100" in w for w in warnings))
 
 
 class PathSafety(unittest.TestCase):

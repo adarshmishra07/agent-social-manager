@@ -5,7 +5,7 @@ description: Run the user's Instagram for them. Sets up their Meta developer app
 
 # Instagram manager
 
-You run the user's Instagram. They should never have to learn Meta's developer setup: you drive the browser. Hand these to the user, and tell them exactly what to click:
+You run the user's Instagram. They should never have to learn Meta's developer setup or run a command: you drive the browser and run every command yourself. Hand these to the user, and tell them exactly what to click:
 - logging in, 2FA, phone or email codes
 - anything that accepts terms or gives consent: developer registration, the final "Create app", "Allow" on the Instagram screen
 - attaching the app to a business ("Connect" or create on the business portfolio)
@@ -68,13 +68,15 @@ So:
    - Meta only issues tokens for public accounts.
    On newer apps, "Generate token" first says "Select a configuration in Step 1 before generating an access token". Go to "1. Configure your app" > "Create new configuration" (Facebook Login for Business, system-user token that never expires). Assign only the Instagram account as the asset, never an ad account. Hand any consent or asset-assignment click to the user.
 
-   **The token step must happen in the user's normal browser.** "Generate token" opens an Instagram login and consent popup ("Log in to Business Tools from Meta"), and the token only appears on the developer page in the same browser that finished that popup. Instagram blocks logins in automated browsers, and consent given in one browser doesn't carry over to another. So if you used an automated browser for the earlier steps, switch here: the user opens the "API setup with Unified login" page in their own browser, clicks "Generate token", picks their Instagram account (and no ad account), and saves. The consent screen may show a second business portfolio named after the Instagram account; that's normal. Suggest unchecking "Allow access to messages" unless they want DM features. Then they copy the token and run `pbpaste | python3 ig.py auth ...` themselves (step 6), so you never see it.
+   **The token step must happen in the user's normal browser.** "Generate token" opens an Instagram login and consent popup ("Log in to Business Tools from Meta"), and the token only appears on the developer page in the same browser that finished that popup. Instagram blocks logins in automated browsers, and consent given in one browser doesn't carry over to another. So if you used an automated browser for the earlier steps, switch here: the user opens the "API setup with Unified login" page in their own browser, clicks "Generate token", picks their Instagram account (and no ad account), and saves. The consent screen may show a second business portfolio named after the Instagram account; that's normal. Suggest unchecking "Allow access to messages" unless they want DM features. Then they copy the token and tell you, and you save it straight from the clipboard (step 6) so it never appears in the chat.
 6. **Save it.** Never put the token on a command line, because it ends up in shell history. Pipe it in:
    ```
    printf %s "$TOKEN" | python3 ig.py auth                                     # token starts with IGAA (older apps)
    printf %s "$TOKEN" | python3 ig.py auth --ig-user-id 1784...                # token starts with EAA (newer apps, Unified login)
    ```
-   For EAA tokens, the Instagram account ID is the number shown next to the account under "Generate access tokens". If the user copies the token themselves, they can run `pbpaste | python3 ig.py auth ...` (macOS) so it never appears on screen.
+   For EAA tokens, the Instagram account ID is the number shown next to the account under "Generate access tokens".
+
+   When the user copied the token in their browser, read it from the clipboard yourself: `pbpaste | python3 ig.py auth ...` on macOS, `xclip -o -selection clipboard | ...` or `wl-paste | ...` on Linux. Never ask the user to paste the token into the chat, and never echo it. Afterwards, tell them to copy something else so the token leaves their clipboard.
    The app stays in development mode. That's correct: it only serves this one account, so it never needs App Review.
 7. **Timezone.** Ask the user which timezone the posting times should follow (usually where their audience is), and set it: `python3 ig.py config --timezone Asia/Kolkata`. This works before `auth`, so do it while waiting on the user. Calendar times stay in that zone even when the user travels.
 8. **Folder.** `python3 ig.py init --dir ~/instagram` creates `content.csv` and `media/`. On macOS, don't use Desktop, Documents or Downloads: the system blocks background jobs from reading them.
@@ -203,7 +205,7 @@ Instagram throttles at several levels, and the tool handles each one:
 
 | limit | what ig.py does | what you do |
 |---|---|---|
-| 50 published posts per rolling 24h per account (a carousel counts once) | `run-due` checks the quota first. Rows over the limit stay `scheduled` with `error: waiting: ...` and go out on a later run. `validate` warns when more than 50 fall within 24h | Spread posts out. `ig.py limit` shows usage |
+| 100 published posts per rolling 24h per account (Meta's `quota_total`) (a carousel counts once) | `run-due` checks the quota first. Rows over the limit stay `scheduled` with `error: waiting: ...` and go out on a later run. `validate` warns when more than 100 fall within 24h | Spread posts out. `ig.py limit` shows usage |
 | API call throttling (HTTP 429, error codes 4, 17, 32, 613, 80002) | Stops immediately with a `Rate limited` error saying when access returns, and never retries in a loop. In `run-due`, unposted rows stay `scheduled` | Wait for the time in the error. Don't rerun commands to "push through" |
 | Temporary Meta errors (5xx, `is_transient`) | Retries reads twice with backoff. Never retries a publish, to avoid double posts | If a publish fails this way, check `ig.py media` before retrying |
 | Comment replies | `reply` waits at least 20 s since the last reply on that account | Reply to a batch of comments at most once an hour, write a different reply each time, and skip replying to every single emoji |

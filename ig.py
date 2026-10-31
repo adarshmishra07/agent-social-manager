@@ -52,7 +52,7 @@ REFRESH_AFTER_DAYS = 7  # long-lived tokens last 60 days; refresh early and ofte
 STATUS_WAIT_SECONDS = 600  # reels can take minutes to download and process
 RATE_LIMIT_CODES = {4, 17, 32, 613, 80002}  # Meta app, user and business-use-case throttling
 GET_TRIES = 3  # retry reads on transient errors; writes are never retried blind (no double posts)
-PUBLISH_DAILY_LIMIT = 50  # fallback if the API doesn't report its own quota_total
+PUBLISH_DAILY_LIMIT = 100  # Meta's quota_total per rolling 24h; run-due uses the live API value when it can
 REPLY_GAP_SECONDS = 20  # rapid-fire replies can get the account action-blocked
 
 
@@ -990,7 +990,8 @@ def cmd_doctor(a):
         try:
             c = maybe_refresh(load_creds())
             me = profile(c, "id,username" if c.get("login") == "facebook" else "username,account_type")
-            check("auth", True, f"@{me.get('username')} ({me.get('account_type')})")
+            kind = me.get("account_type") or ("Unified login" if c.get("login") == "facebook" else "")
+            check("auth", True, f"@{me.get('username')}" + (f" ({kind})" if kind else ""))
             try:
                 left = publish_quota_left(c)
                 check("quota", left > 0, f"{left} posts left in the rolling 24h window",
@@ -998,8 +999,9 @@ def cmd_doctor(a):
             except IGError as e:
                 check("quota", False, str(e)[:200], "Wait, then run doctor again", optional=True)
             days = (c["expires_at"] - time.time()) / 86400 if c.get("expires_at") else None
-            check("token", days is None or days > 3,
-                  f"expires in {days:.0f} days" if days is not None else "refreshes on next run",
+            detail = ("never expires (system-user token)" if c.get("login") == "facebook"
+                      else f"expires in {days:.0f} days" if days is not None else "refreshes on next run")
+            check("token", days is None or days > 3, detail,
                   "Run `ig.py refresh`, or redo SKILL.md setup steps 5-6 if that fails")
         except IGError as e:
             check("auth", False, str(e)[:300], "Token invalid or expired. Redo SKILL.md setup steps 5-6")
@@ -1018,7 +1020,7 @@ def cmd_doctor(a):
               f"`ig.py init{acct} --dir {folder}`, then pass --csv {folder}/content.csv to commands")
     s = schedule("status", a.csv, account=ACCOUNT)
     check("schedule", s["installed"], json.dumps(s["command"]) if s["command"] else "not installed",
-          f"`ig.py schedule install --csv <path to content.csv>{'' if ACCOUNT == 'default' else ' --account ' + ACCOUNT}`")
+          f"`ig.py schedule install{acct} --csv {a.csv}`")
     check("ffmpeg", shutil.which("ffprobe"), shutil.which("ffprobe") or "missing",
           "Install ffmpeg (brew install ffmpeg) to check and fix videos and add music", optional=True)
     cf = find_cloudflared()
