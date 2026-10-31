@@ -23,10 +23,17 @@ It checks everything and prints `next_step` (exit code 1 until ready). Do that s
 
 ## 1. One-time setup (you do it in the browser)
 
+**Before you start, ask the user to confirm all of this in one message.** Each item, found missing mid-setup, costs a round trip:
+1. A Facebook account (their normal one is fine; it only owns the private app).
+2. Their Instagram account is Professional (Business or Creator) and **public**.
+3. **Facebook and Instagram are both logged in, in the same browser** that you'll drive. Meta's token popup needs both sessions in one window, and the token only appears in that browser.
+4. About 10 minutes, during which they'll click about 6 buttons that need a person: accepting terms, creating the app, the business portfolio, the Instagram tester invite, the consent screen and copying the token.
+
+
 Use the browser the user already uses, in this order:
 1. **Their own browser through an extension**, such as Claude in Chrome. They're usually already logged in to Facebook and Instagram, so there are fewer stops, and Meta is less likely to flag the login. Work in a new tab, not their open ones.
 2. **Computer use** on their usual browser, if there's no extension.
-3. **A fresh automated browser** (Playwright and similar) only as a last resort. The user has to log in to everything again. Start it from a scratch folder: Playwright saves page snapshots, which include the user's email and IDs, into the current directory. Never commit them.
+3. **A fresh automated browser** (Playwright and similar) only as a last resort. The user has to log in to Facebook and Instagram again in that window, and Instagram often blocks logins there. If it does, switch to their normal browser for the rest of setup. Start it from a scratch folder: Playwright saves page snapshots, which include the user's email and IDs, into the current directory. Never commit them.
 
 **Every setup is different.** Meta's flow changes with the app's age (newer apps get "Unified login"), the Facebook account's age, how many business portfolios the user has, their region, and whatever Meta redesigned last week. The steps below are a map of one verified run, not a script. What matters is the goal:
 
