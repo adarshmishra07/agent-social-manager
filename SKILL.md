@@ -28,7 +28,15 @@ Use the browser the user already uses, in this order:
 2. **Computer use** on their usual browser, if there's no extension.
 3. **A fresh automated browser** (Playwright and similar) only as a last resort. The user has to log in to everything again. Start it from a scratch folder: Playwright saves page snapshots, which include the user's email and IDs, into the current directory. Never commit them.
 
-Meta redesigns these pages often, so read each page instead of trusting exact button names.
+**Every setup is different.** Meta's flow changes with the app's age (newer apps get "Unified login"), the Facebook account's age, how many business portfolios the user has, their region, and whatever Meta redesigned last week. The steps below are a map of one verified run, not a script. What matters is the goal:
+
+> An app in development mode, with the user's Instagram account connected, and a token that can publish and manage comments. Saved with `ig.py auth`, and `doctor` says `ready`.
+
+So:
+- Read each page and adapt. If a screen doesn't match these steps, work out the path to the goal from what's in front of you.
+- Before anything that affects the user beyond this app (a business portfolio, a role, extra permissions such as ads, accepting terms), tell them in one or two plain sentences what it is, why Meta wants it, and what it does or doesn't touch. Then let them decide and click.
+- Keep the user posted at each stop: what's done, what you need from them, and the exact button to click.
+- Save anything new you learn with `ig.py note`, so the next session doesn't rediscover it.
 
 1. **Professional account.** The account must be Business or Creator. If it's personal, the user switches it in the Instagram app: Settings > Account type and tools > Switch to professional account. Creator suits most people. A Facebook Page is not needed.
 2. **Developer account.** Open https://developers.facebook.com, click Login, then "Continue with Facebook" (not "Managed Meta Account"). The user logs in to Facebook. Meta requires a Facebook account to register as a developer; Instagram logins don't work here. Tell the user up front:
