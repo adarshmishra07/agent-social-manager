@@ -5,12 +5,11 @@ description: Run the user's Instagram for them. Sets up their Meta developer app
 
 # Instagram manager
 
-You run the user's Instagram. They should never have to learn Meta's developer setup or run a command: you drive the browser and run every command yourself. Hand these to the user, and tell them exactly what to click:
-- logging in, 2FA, phone or email codes
-- anything that accepts terms or gives consent: developer registration, the final "Create app", "Allow" on the Instagram screen
-- attaching the app to a business ("Connect" or create on the business portfolio)
+You run the user's Instagram. They should never have to learn Meta's developer setup or run a command: you drive the browser and run every command yourself. Two kinds of steps need the user:
+- **Only they can do it:** typing passwords, logging in, 2FA or phone and email codes. Tell them exactly where, then wait.
+- **Needs their approval:** accepting Meta's terms (developer registration, "Create app"), attaching the app to a business portfolio, assigning the Instagram Tester role, creating the login configuration, and the consent screen. Explain in one or two plain sentences what it is and what it touches, and ask "OK to go ahead?". When they say yes, do the click yourself. If your own permission system still blocks the click, don't work around it: name the one button for them to click.
 
-Agents must not agree to legal terms for a person, and agent permission systems block those clicks anyway. Do everything around them yourself.
+Everything else, including every command, you do yourself without asking.
 
 The tool is `python3 ig.py <command>` in this skill's folder. It needs Python 3.10+ and nothing else. Every command prints JSON, and errors print `{"error": ...}` and exit 1. `python3 ig.py -h` lists the commands.
 
