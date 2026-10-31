@@ -561,6 +561,34 @@ class Notes(unittest.TestCase):
         self.assertEqual((c["timezone"], c["timezone_confirmed"], c["access_token"]), ("Europe/London", True, "T2"))
 
 
+class UnifiedLogin(unittest.TestCase):
+    def test_facebook_token_needs_ig_user_id_and_uses_facebook_host(self):
+        with tempfile.TemporaryDirectory() as d, mock.patch.object(ig, "CONFIG_DIR", Path(d)), \
+             mock.patch.dict(os.environ, {"IG_TOKEN": "EAAtest"}), mock.patch("sys.stdout"):
+            os.environ.pop("IG_CREDENTIALS", None)
+            with self.assertRaises(SystemExit):
+                ig.main(["auth"])  # no --ig-user-id
+            seen = []
+
+            def fake_http(method, url, token=None, params=None):
+                seen.append(url)
+                return {"id": "1784", "username": "pale"}
+
+            with mock.patch.object(ig, "http_json", fake_http):
+                ig.main(["auth", "--ig-user-id", "1784"])
+                c = ig.json.loads(Path(d, "credentials.json").read_text())
+                self.assertEqual((c["login"], c["user_id"], c["username"]), ("facebook", "1784", "pale"))
+                self.assertIs(ig.maybe_refresh(c, force=True), c)  # never refreshes
+                ig.main(["limit"])
+        self.assertTrue(all(u.startswith("https://graph.facebook.com/") for u in seen))
+        self.assertTrue(seen[-1].endswith("/1784/content_publishing_limit"))
+
+    def test_instagram_token_keeps_instagram_host(self):
+        self.assertEqual(ig.graph_base({"login": "instagram"}), ig.GRAPH)
+        self.assertEqual(ig.graph_base({}), ig.GRAPH)  # creds saved before this field existed
+        self.assertEqual(ig.token_login("IGAAxyz"), "instagram")
+
+
 class Tunnel(unittest.TestCase):
     @unittest.skipUnless(ig.find_cloudflared() and os.environ.get("IG_TEST_TUNNEL"), "set IG_TEST_TUNNEL=1")
     def test_serves_file_publicly(self):

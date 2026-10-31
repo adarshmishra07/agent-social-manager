@@ -30,7 +30,9 @@ from urllib.request import Request, urlopen
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 API_VERSION = "v26.0"
-GRAPH = f"https://graph.instagram.com/{API_VERSION}"
+GRAPH = f"https://graph.instagram.com/{API_VERSION}"  # Instagram Login tokens (IGAA...), older apps
+GRAPH_FB = f"https://graph.facebook.com/{API_VERSION}"  # Unified / Facebook Login tokens (EAA...), newer apps
+PROFILE_FIELDS_FB = "id,username,name,biography,website,profile_picture_url,followers_count,follows_count,media_count"
 CONFIG_DIR = Path("~/.config/ig-agent").expanduser()
 CREDS = CONFIG_DIR / "credentials.json"  # set per --account in main()
 ACCOUNT = "default"
@@ -166,11 +168,29 @@ def publish_quota_left(creds):
     return int(total) - int(d.get("quota_usage", 0))
 
 
+def token_login(token):
+    """Meta issues Facebook-style tokens (EAA...) to apps on Unified login, Instagram-style ones otherwise."""
+    return "facebook" if token.startswith("EAA") else "instagram"
+
+
+def graph_base(creds):
+    return GRAPH_FB if creds.get("login") == "facebook" else GRAPH
+
+
 def api(method, path, creds, **params):
-    return http_json(method, f"{GRAPH}/{path}", creds["access_token"], params)
+    return http_json(method, f"{graph_base(creds)}/{path}", creds["access_token"], params)
+
+
+def profile(creds, fields=None):
+    if creds.get("login") == "facebook":
+        return api("GET", creds["user_id"], creds, fields=fields or PROFILE_FIELDS_FB)
+    return api("GET", "me", creds, fields=fields or "user_id,username,name,account_type,biography,website,"
+                                                    "profile_picture_url,followers_count,follows_count,media_count")
 
 
 def maybe_refresh(creds, force=False):
+    if creds.get("login") == "facebook":
+        return creds  # ponytail: system-user tokens never expire; a 60-day Facebook user token would need the app secret to extend
     age_days = (time.time() - creds.get("refreshed_at", 0)) / 86400
     if not force and age_days < REFRESH_AFTER_DAYS:
         return creds
@@ -834,11 +854,20 @@ def cmd_auth(a):
     token = (os.environ.get("IG_TOKEN") or sys.stdin.read()).strip()
     if not token:
         raise IGError("Pass the token on stdin or in IG_TOKEN")
-    me = http_json("GET", f"{GRAPH}/me", token, {"fields": "user_id,username,account_type"})
     old = load_settings()
-    creds = {**old, "access_token": token, "user_id": me["user_id"], "username": me.get("username"),
-             "account_type": me.get("account_type"), "refreshed_at": 0,
-             "timezone": old.get("timezone") or system_tz_name()}
+    base = {**old, "access_token": token, "refreshed_at": 0, "timezone": old.get("timezone") or system_tz_name()}
+    if token_login(token) == "facebook":
+        if not a.ig_user_id:
+            raise IGError("This is a Unified/Facebook Login token (starts with EAA). Pass --ig-user-id: the numeric "
+                          "Instagram account ID shown next to the account under 'Generate access tokens'")
+        creds = {**base, "login": "facebook", "user_id": a.ig_user_id}
+        me = profile(creds, "id,username")
+        save_creds({**creds, "username": me.get("username")})
+        out({k: v for k, v in load_settings().items() if k != "access_token"})
+        return
+    me = http_json("GET", f"{GRAPH}/me", token, {"fields": "user_id,username,account_type"})
+    creds = {**base, "login": "instagram", "user_id": me["user_id"], "username": me.get("username"),
+             "account_type": me.get("account_type")}
     try:
         creds = maybe_refresh(creds, force=True)  # starts a fresh 60 days
     except IGError as e:
@@ -907,12 +936,14 @@ def cmd_accounts(a):
 
 def cmd_whoami(a):
     c = load_creds()
-    out(api("GET", "me", c, fields="user_id,username,name,account_type,biography,website,"
-                                   "profile_picture_url,followers_count,follows_count,media_count"))
+    out(profile(c))
 
 
 def cmd_refresh(a):
     c = maybe_refresh(load_creds(), force=True)
+    if c.get("login") == "facebook":
+        out({"ok": True, "note": "Unified login system-user tokens don't expire; nothing to refresh"})
+        return
     out({"ok": True, "expires_at": datetime.fromtimestamp(c["expires_at"]).isoformat()})
 
 
@@ -958,7 +989,7 @@ def cmd_doctor(a):
     else:
         try:
             c = maybe_refresh(load_creds())
-            me = api("GET", "me", c, fields="username,account_type")
+            me = profile(c, "id,username" if c.get("login") == "facebook" else "username,account_type")
             check("auth", True, f"@{me.get('username')} ({me.get('account_type')})")
             try:
                 left = publish_quota_left(c)
@@ -1047,7 +1078,8 @@ def main(argv=None):
         return s
 
     add("doctor", cmd_doctor, "Check setup and print the next step", csv_arg=True)
-    add("auth", cmd_auth, "Save a token read from stdin or IG_TOKEN")
+    add("auth", cmd_auth, "Save a token read from stdin or IG_TOKEN").add_argument(
+        "--ig-user-id", help="Instagram account ID; required for Unified login (EAA...) tokens")
     add("accounts", cmd_accounts, "List connected accounts")
     add("note", cmd_note, "Save a lesson for future sessions (shown by doctor)").add_argument("text")
     add("config", cmd_config, "Show settings, or set --timezone").add_argument("--timezone", help="IANA name, e.g. Asia/Kolkata")

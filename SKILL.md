@@ -51,17 +51,20 @@ Meta redesigns these pages often, so read each page instead of trusting exact bu
    - Check it took: App roles > Roles lists the account as "Instagram Tester" with status "Pending" until it's accepted. (The "Testers" count there doesn't include Instagram testers.)
    - Instagram often blocks logins from automated browsers. If the login fails there, use the user's normal browser. The user must be able to log in to the account: confirm that before starting setup.
    - Meta only issues tokens for public accounts.
-6. **Save it.** Never put the token on a command line, because it ends up in shell history:
+   On newer apps, "Generate token" first says "Select a configuration in Step 1 before generating an access token". Go to "1. Configure your app" > "Create new configuration" (Facebook Login for Business, system-user token that never expires). Assign only the Instagram account as the asset, never an ad account. Hand any consent or asset-assignment click to the user. Then "Generate token" works.
+6. **Save it.** Never put the token on a command line, because it ends up in shell history. Pipe it in:
    ```
-   printf %s "$TOKEN" | python3 ig.py auth
+   printf %s "$TOKEN" | python3 ig.py auth                                     # token starts with IGAA (older apps)
+   printf %s "$TOKEN" | python3 ig.py auth --ig-user-id 1784...                # token starts with EAA (newer apps, Unified login)
    ```
+   For EAA tokens, the Instagram account ID is the number shown next to the account under "Generate access tokens". If the user copies the token themselves, they can run `pbpaste | python3 ig.py auth ...` (macOS) so it never appears on screen.
    The app stays in development mode. That's correct: it only serves this one account, so it never needs App Review.
 7. **Timezone.** Ask the user which timezone the posting times should follow (usually where their audience is), and set it: `python3 ig.py config --timezone Asia/Kolkata`. This works before `auth`, so do it while waiting on the user. Calendar times stay in that zone even when the user travels.
 8. **Folder.** `python3 ig.py init --dir ~/instagram` creates `content.csv` and `media/`. On macOS, don't use Desktop, Documents or Downloads: the system blocks background jobs from reading them.
 9. **Tools.** `brew install cloudflared ffmpeg`, or the Linux equivalent. You need cloudflared to post local files reliably (see Media hosting) and ffmpeg to check, fix and add music to videos.
 10. **Schedule.** `python3 ig.py schedule install --csv ~/instagram/content.csv` runs `run-due` every 5 minutes, using launchd on macOS and cron on Linux. `schedule status` and `schedule remove` do what they say.
 
-The token lasts 60 days. `post`, `run-due` and `doctor` refresh it once it's a week old, so it never expires while something runs at least every ~50 days. If it does expire, repeat steps 5 and 6.
+Token lifetime: Unified login (EAA) system-user tokens don't expire. Instagram login (IGAA) tokens last 60 days, and `post`, `run-due` and `doctor` refresh them once they're a week old, so they never expire while something runs at least every ~50 days. If a token stops working, repeat steps 5 and 6.
 
 ## 2. The content calendar
 
