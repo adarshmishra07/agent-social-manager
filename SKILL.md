@@ -14,14 +14,14 @@ The tool is `python3 ig.py <command>` in this skill's folder. It needs Python 3.
 ```
 python3 ig.py doctor --csv <path to content.csv>
 ```
-It checks everything and prints `next_step`. Do that step, then run `doctor` again. When `ready` is true, the account is fully managed.
+It checks everything and prints `next_step` (exit code 1 until ready). Do that step, then run `doctor` again. When `ready` is true, the account is fully managed. Offline steps (folder, tools, timezone question) can happen while you wait for the user to log in.
 
 ## 1. One-time setup (you do it in the browser)
 
 Use whatever browser control you have (Claude in Chrome, Playwright, computer use). Meta redesigns these pages often, so read each page instead of trusting exact button names.
 
 1. **Professional account.** The account must be Business or Creator. If it's personal, the user switches it in the Instagram app: Settings > Account type and tools > Switch to professional account. Creator suits most people. A Facebook Page is not needed.
-2. **Developer account.** Open https://developers.facebook.com and log in with Facebook. If the user isn't registered as a developer yet, click "Get started" and finish it. Meta may ask the user to verify a phone number or email.
+2. **Developer account.** Open https://developers.facebook.com, click Login, then "Continue with Facebook" (not "Managed Meta Account"). The user logs in to Facebook. If the user isn't registered as a developer yet, click "Get started" and finish it. Meta may ask the user to verify a phone number or email.
 3. **Create the app.** My Apps > Create app. Name it "<username> manager". For the use case, choose the one about managing messaging and content on Instagram. If asked for an app type, choose Business. Skip the business portfolio if you're allowed to.
 4. **Connect the account and get a token.** In the app, go to Instagram > API setup with Instagram login > Generate access tokens > Add account. The user logs in to Instagram and clicks Allow. Then click "Generate token" next to the account and copy it. If Meta says the account has to accept a tester invite, open https://www.instagram.com/accounts/manage_access/ and accept it under "Tester invites".
 5. **Save it.** Never put the token on a command line, because it ends up in shell history:

@@ -847,7 +847,7 @@ def cmd_config(a):
     c = load_creds()
     if a.timezone:
         get_tz(a.timezone)  # validate
-        c = {**c, "timezone": a.timezone}
+        c = {**c, "timezone": a.timezone, "timezone_confirmed": True}
         save_creds(c)
     out({k: v for k, v in c.items() if k != "access_token"})
 
@@ -915,10 +915,12 @@ def cmd_doctor(a):
         checks.append({"check": name, "ok": bool(ok), "detail": detail,
                        **({"fix": fix} if not ok and fix else {}), **({"optional": True} if optional else {})})
 
+    acct = "" if ACCOUNT == "default" else f" --account {ACCOUNT}"
     checks.append({"check": "account", "ok": True, "detail": ACCOUNT})
     check("python", sys.version_info >= (3, 10), sys.version.split()[0], "Install Python 3.10 or newer")
     if not CREDS.exists():
-        check("auth", False, "no token saved", "Follow SKILL.md section 1 (Meta app setup), then `ig.py auth`")
+        check("auth", False, "no token saved",
+              f"Do SKILL.md section 1 steps 1-5 (Meta app in the browser), then `ig.py auth{acct}`")
     else:
         try:
             c = maybe_refresh(load_creds())
@@ -936,7 +938,9 @@ def cmd_doctor(a):
                   "Run `ig.py refresh`, or redo SKILL.md setup steps 4-5 if that fails")
         except IGError as e:
             check("auth", False, str(e)[:300], "Token invalid or expired. Redo SKILL.md setup steps 4-5")
-    check("timezone", True, str(get_tz()))
+    confirmed = CREDS.exists() and json.loads(CREDS.read_text()).get("timezone_confirmed")
+    check("timezone", confirmed, f"{get_tz()}" + ("" if confirmed else " (machine default, not confirmed)"),
+          f"Ask the user which timezone posting times should follow, then `ig.py config{acct} --timezone <IANA name>`")
     csv_path = Path(a.csv)
     if csv_path.exists():
         rows = read_rows(a.csv)
@@ -944,7 +948,9 @@ def cmd_doctor(a):
         check("calendar", not problems, f"{len(rows)} rows" if not problems else "; ".join(problems[:5]),
               "Fix those rows, then `ig.py validate`")
     else:
-        check("calendar", False, f"{a.csv} not found", "`ig.py init --dir ~/instagram`, then pass --csv to commands")
+        folder = "~/instagram" if ACCOUNT == "default" else f"~/instagram-{ACCOUNT}"
+        check("calendar", False, f"{a.csv} not found",
+              f"`ig.py init{acct} --dir {folder}`, then pass --csv {folder}/content.csv to commands")
     s = schedule("status", a.csv, account=ACCOUNT)
     check("schedule", s["installed"], json.dumps(s["command"]) if s["command"] else "not installed",
           f"`ig.py schedule install --csv <path to content.csv>{'' if ACCOUNT == 'default' else ' --account ' + ACCOUNT}`")
@@ -955,6 +961,8 @@ def cmd_doctor(a):
           "media goes through litterbox.catbox.moe, a free host with no uptime promise", optional=True)
     fails = [c for c in checks if not c["ok"] and not c.get("optional")]
     out({"ready": not fails, "next_step": fails[0]["fix"] if fails else None, "checks": checks})
+    if fails:
+        sys.exit(1)
 
 
 def cmd_media(a):
