@@ -5,7 +5,12 @@ description: Run the user's Instagram for them. Sets up their Meta developer app
 
 # Instagram manager
 
-You run the user's Instagram. They should never have to learn Meta's developer setup: you drive the browser. Stop only for steps that need a human: logging in, 2FA or phone checks, and clicking "Allow".
+You run the user's Instagram. They should never have to learn Meta's developer setup: you drive the browser. Hand these to the user, and tell them exactly what to click:
+- logging in, 2FA, phone or email codes
+- anything that accepts terms or gives consent: developer registration, the final "Create app", "Allow" on the Instagram screen
+- attaching the app to a business ("Connect" or create on the business portfolio)
+
+Agents must not agree to legal terms for a person, and agent permission systems block those clicks anyway. Do everything around them yourself.
 
 The tool is `python3 ig.py <command>` in this skill's folder. It needs Python 3.10+ and nothing else. Every command prints JSON, and errors print `{"error": ...}` and exit 1. `python3 ig.py -h` lists the commands.
 
@@ -31,12 +36,12 @@ Meta redesigns these pages often, so read each page instead of trusting exact bu
    - If they have no Facebook account, they create one at facebook.com first (free, a few minutes). There's no way around this.
    - The Instagram account(s) they want managed connect separately with Instagram's own login in step 5.
 
-   If the user isn't registered as a developer yet, click "Get started" and finish it. Meta may ask the user to verify a phone number or email.
+   If the user isn't a developer yet, the header shows "Get Started" instead of "My Apps" (and /apps/ quietly redirects to the home page). Registration starts with accepting Meta's Platform Terms, so it's the user's step: they click "Get Started" and go through Register > Verify account (phone or email code) > Contact info > About you, until the Apps page loads.
 3. **Create the app.** My Apps > Create app. The wizard goes App details > Use cases > Business > Requirements > Overview:
    - App details: name it "<username> manager". Keep the pre-filled contact email.
    - Use cases: pick "Manage messaging & content on Instagram". It isn't in the default "Featured" filter. Look under "Content management", or "All".
    - Business: choose "I don't want to connect a business portfolio yet". You create a fresh one in step 4.
-   - Requirements and Overview: continue, then "Create app".
+   - Requirements and Overview: continue. The Overview says "By proceeding, you agree to the Meta Platform Terms", so the user clicks "Create app".
 4. **Business portfolio (create a new one).** Meta won't connect an Instagram account until the app has a business portfolio. On the "API setup with Unified login" page (step 5 shows how to get there) it says "Business portfolio selection is mandatory". Click "+ Business portfolio", wait a second for the dialog to settle (early clicks get ignored), then "Create a new business portfolio" and name it "<username> social". If Meta asks for a name or business email, use the pre-filled values. If a confirmation code or email is needed, hand that to the user.
    - Don't pick an existing portfolio on your own, even if the dialog lists some. Linking makes that portfolio the app's owner, so its admins can see the app. It doesn't touch any posts, pages or ads.
    - If Meta says "Unable to create new Meta Business Suite account ... reached the limit", the user's Facebook is at Meta's portfolio cap (this happens to founders and agencies). Show the user the list (names and Verified/Unverified) and ask which to connect. Recommend an unverified or unused one. Never delete a portfolio to free a slot. Deleting removes everything attached to it, and it doesn't help anyway: the portfolio stays listed as pending deletion and keeps counting against the limit for a while. A user at the cap who wants a clean setup can use a different Facebook account that has no portfolios.
