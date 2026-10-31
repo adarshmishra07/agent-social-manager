@@ -13,7 +13,7 @@ Everything else, including every command, you do yourself without asking.
 
 **Never publish a test post** (or story, or comment reply) to check that setup worked. Everything you post is public on the user's real account, followers get notified, and the API can't delete posts or comments' replies once they're out. To verify setup, use read-only commands: `doctor`, `whoami`, `limit`, `media`. Only post a test if the user explicitly asks for one. Even then, first warn them that it's public, that it can't be deleted through the API, and that they'll need to delete it themselves in the Instagram app afterwards. Suggest a story instead: it disappears after 24 hours.
 
-The tool is `python3 ig.py <command>` in this skill's folder. It needs Python 3.10+ and nothing else. Every command prints JSON, and errors print `{"error": ...}` and exit 1. `python3 ig.py -h` lists the commands.
+The tool is `python3 ig.py <command>` in this skill's folder (use its full path when you run it from elsewhere). It needs Python 3.10+ and nothing else. Every command prints JSON, and errors print `{"error": ...}` and exit 1. `python3 ig.py -h` lists the commands.
 
 ## Start here, every time
 
@@ -28,8 +28,7 @@ It checks everything and prints `next_step` (exit code 1 until ready). Do that s
 1. A Facebook account (their normal one is fine; it only owns the private app).
 2. Their Instagram account is Professional (Business or Creator) and **public**.
 3. **Facebook and Instagram are both logged in, in the same browser** that you'll drive. Meta's token popup needs both sessions in one window, and the token only appears in that browser.
-4. About 10 minutes, during which they'll click about 6 buttons that need a person: accepting terms, creating the app, the business portfolio, the Instagram tester invite, the consent screen and copying the token.
-
+4. About 10 minutes, during which they'll approve about 6 steps (terms, the app, the business portfolio, the tester invite, the consent screen) and copy the token once.
 
 Use the browser the user already uses, in this order:
 1. **Their own browser through an extension**, such as Claude in Chrome. They're usually already logged in to Facebook and Instagram, so there are fewer stops, and Meta is less likely to flag the login. Work in a new tab, not their open ones.
@@ -42,8 +41,8 @@ Use the browser the user already uses, in this order:
 
 So:
 - Read each page and adapt. If a screen doesn't match these steps, work out the path to the goal from what's in front of you.
-- Before anything that affects the user beyond this app (a business portfolio, a role, extra permissions such as ads, accepting terms), tell them in one or two plain sentences what it is, why Meta wants it, and what it does or doesn't touch. Then let them decide and click.
-- Keep the user posted at each stop: what's done, what you need from them, and the exact button to click.
+- Before anything that affects the user beyond this app (a business portfolio, a role, extra permissions such as ads, accepting terms), tell them in one or two plain sentences what it is, why Meta wants it, and what it does or doesn't touch. Then ask for approval, and click once they say yes.
+- Keep the user posted at each stop: what's done and what you need from them.
 - Save anything new you learn with `ig.py note`, so the next session doesn't rediscover it.
 
 1. **Professional account.** The account must be Business or Creator. If it's personal, the user switches it in the Instagram app: Settings > Account type and tools > Switch to professional account. Creator suits most people. A Facebook Page is not needed.
@@ -62,14 +61,15 @@ So:
    - Don't pick an existing portfolio on your own, even if the dialog lists some. Linking makes that portfolio the app's owner, so its admins can see the app. It doesn't touch any posts, pages or ads.
    - If Meta says "Unable to create new Meta Business Suite account ... reached the limit", the user's Facebook is at Meta's portfolio cap (this happens to founders and agencies). Show the user the list (names and Verified/Unverified) and ask which to connect. Recommend an unverified or unused one. Never delete a portfolio to free a slot. Deleting removes everything attached to it, and it doesn't help anyway: the portfolio stays listed as pending deletion and keeps counting against the limit for a while. A user at the cap who wants a clean setup can use a different Facebook account that has no portfolios.
    - Ask for approval before clicking "Connect" or creating the portfolio: attaching an app to a business is the user's decision. The wizard's "Business" step may show some portfolios greyed out that are selectable here.
-5. **Connect the account and get a token.** Open the use case: Dashboard > "Customize the Manage messaging & content on Instagram use case". In the left menu, under "Instagram API", open "API setup with Unified login" (Meta's new name for "API setup with Instagram login"). Under "Generate access tokens", click "Add account". The user logs in to Instagram and clicks Allow. Then click "Generate token" next to the account and copy it. On newer apps, "Add account" opens "Add people to your app" instead of an Instagram login. The user picks "Instagram Tester", types the Instagram username and clicks "Add" (if Meta says "Form can't be saved", remove the name and pick it from the dropdown). That sends a tester invite, which must be accepted before "Generate token" appears:
-   - Easiest: the user opens https://www.instagram.com/accounts/manage_access/?tab=tester in their normal browser, logged in to that Instagram account, and accepts it. Meta also calls this "Apps and websites" in the profile. Menu paths in the phone app vary and are often missing.
-   - Check it took: App roles > Roles lists the account as "Instagram Tester" with status "Pending" until it's accepted. (The "Testers" count there doesn't include Instagram testers.)
-   - Instagram often blocks logins from automated browsers. If the login fails there, use the user's normal browser. The user must be able to log in to the account: confirm that before starting setup.
+5. **Connect the account and get a token.** Open the use case: Dashboard > "Customize the Manage messaging & content on Instagram use case". In the left menu, under "Instagram API", the setup page depends on the app's age:
+   - **Older apps: "API setup with Instagram login".** Under "Generate access tokens", click "Add account". The user logs in to Instagram and clicks Allow. Then click "Generate token" and copy the token (starts with `IGAA`).
+   - **Newer apps: "API setup with Unified login"** (Meta shows "API setup with Instagram login is not available for newer apps"). It's a different flow, in three parts:
+     1. **Tester role.** "2. Generate access tokens" > "See more" > "Add account" > "Continue" opens "Add people to your app". With approval, pick "Instagram Tester", type the username, choose it from the dropdown (free text gives "Form can't be saved"), and click "Add". That sends a tester invite. The user accepts it in their normal browser, logged in to that Instagram account: https://www.instagram.com/accounts/manage_access/?tab=tester (Meta also calls it "Apps and websites"; menu paths in the phone app vary or are missing). App roles > Roles shows "Pending" until it's accepted, and its "Testers" count leaves Instagram testers out.
+     2. **Configuration.** Until one exists, "Generate token" says "Select a configuration in Step 1 before generating an access token". "1. Configure your app" > "Create new configuration" opens a fixed template (system-user token that never expires). It lists ad accounts and ad permissions too. Explain that those only reach ad accounts the user assigns, and they'll assign none. Then, with approval, "Create from template".
+     3. **Token.** "Generate token" opens "Log in to Business Tools from Meta", an Instagram login plus consent. Choose the Instagram account, no ad account, and suggest unchecking "Allow access to messages" unless they want DM features. The token (starts with `EAA`) appears on the developer page, and only in the same browser that finished the popup.
+   - **The token step must run in the user's normal browser.** Instagram blocks logins in automated browsers, and consent doesn't carry over between browsers. If you drive their browser through an extension, do it there with approval. If you used an automated browser so far, switch: the user opens the setup page in their own browser and clicks "Generate token". Either way, the user copies the token and tells you. You save it from the clipboard (step 6), so it never appears in the chat.
+   - The consent screen may show a second business portfolio named after the Instagram account. That's normal.
    - Meta only issues tokens for public accounts.
-   On newer apps, "Generate token" first says "Select a configuration in Step 1 before generating an access token". Go to "1. Configure your app" > "Create new configuration" (Facebook Login for Business, system-user token that never expires). Assign only the Instagram account as the asset, never an ad account. This template also lists ad permissions. Explain that they only reach ad accounts the user assigns, and ask for approval before "Create from template".
-
-   **The token step must happen in the user's normal browser.** "Generate token" opens an Instagram login and consent popup ("Log in to Business Tools from Meta"), and the token only appears on the developer page in the same browser that finished that popup. Instagram blocks logins in automated browsers, and consent given in one browser doesn't carry over to another. So if you used an automated browser for the earlier steps, switch here: the user opens the "API setup with Unified login" page in their own browser, clicks "Generate token", picks their Instagram account (and no ad account), and saves. The consent screen may show a second business portfolio named after the Instagram account; that's normal. Suggest unchecking "Allow access to messages" unless they want DM features. Then they copy the token and tell you, and you save it straight from the clipboard (step 6) so it never appears in the chat.
 6. **Save it.** Never put the token on a command line, because it ends up in shell history. Pipe it in:
    ```
    printf %s "$TOKEN" | python3 ig.py auth                                     # token starts with IGAA (older apps)
@@ -156,7 +156,7 @@ Right after `schedule install`, and whenever the user asks about scheduling, exp
 
 ## 4. Music
 
-The API can't attach songs from Instagram's music library. Meta only offers that with Facebook Login and a linked Page, and this tool uses Instagram Login. You also can't add music after posting. So pick a route per reel:
+This tool can't attach songs from Instagram's music library. Meta's licensed-music Audio API needs a Facebook Login setup that this tool doesn't support yet, and music can't be added after posting. So pick a route per reel:
 
 1. **Original or royalty-free audio (fully automatic).** Mix it into the file and name the sound:
    ```
@@ -169,7 +169,7 @@ The API can't attach songs from Instagram's music library. Meta only offers that
 
 ## 5. Location
 
-`location_id` is the ID of a Facebook Page tied to a physical place (a business, a landmark or a city page). With Instagram Login there's no search API, so find it in the browser: open the place's Facebook page. The numeric ID shows in the URL (`profile.php?id=123...`) or under About > Page transparency. If a page has no address, the post fails with `INVALID_LOCATION_ID`. Pick a page that has one, or post without a location.
+`location_id` is the ID of a Facebook Page tied to a physical place (a business, a landmark or a city page). This tool has no location search, so find it in the browser: open the place's Facebook page. The numeric ID shows in the URL (`profile.php?id=123...`) or under About > Page transparency. If a page has no address, the post fails with `INVALID_LOCATION_ID`. Pick a page that has one, or post without a location.
 
 ## 6. Comments
 
@@ -186,10 +186,10 @@ Write replies in the user's voice. Show drafts first unless they told you to rep
 
 One Meta app can manage several Instagram accounts. Don't create a second app.
 
-1. In the same app, open API setup with Unified login (setup step 5) and click Add account again. The user logs in to the other Instagram account (log out of the first one in that browser, or use a private window). Generate that account's token.
+1. In the same app, repeat setup step 5 for the other Instagram account: add it (as an Instagram Tester on newer apps, which needs its own accepted invite), then generate its token. The user must be logged in to that Instagram account in the browser, so they log out of the first one or use a private window.
 2. Pick a short name for each account (`shop`, `studio`) and pass `--account <name>` to every command. Setting `IG_ACCOUNT=<name>` does the same:
    ```
-   printf %s "$TOKEN" | python3 ig.py auth --account studio
+   pbpaste | python3 ig.py auth --account studio --ig-user-id <id>   # --ig-user-id only for EAA tokens
    python3 ig.py config --account studio --timezone Europe/London
    python3 ig.py init --dir ~/instagram-studio
    python3 ig.py schedule install --account studio --csv ~/instagram-studio/content.csv
@@ -219,7 +219,7 @@ Instagram throttles at several levels, and the tool handles each one:
 
 | limit | what ig.py does | what you do |
 |---|---|---|
-| 100 published posts per rolling 24h per account (Meta's `quota_total`) (a carousel counts once) | `run-due` checks the quota first. Rows over the limit stay `scheduled` with `error: waiting: ...` and go out on a later run. `validate` warns when more than 100 fall within 24h | Spread posts out. `ig.py limit` shows usage |
+| 100 published posts per rolling 24h per account (Meta's `quota_total`; a carousel counts once) | `run-due` checks the quota first. Rows over the limit stay `scheduled` with `error: waiting: ...` and go out on a later run. `validate` warns when more than 100 fall within 24h | Spread posts out. `ig.py limit` shows usage |
 | API call throttling (HTTP 429, error codes 4, 17, 32, 613, 80002) | Stops immediately with a `Rate limited` error saying when access returns, and never retries in a loop. In `run-due`, unposted rows stay `scheduled` | Wait for the time in the error. Don't rerun commands to "push through" |
 | Temporary Meta errors (5xx, `is_transient`) | Retries reads twice with backoff. Never retries a publish, to avoid double posts | If a publish fails this way, check `ig.py media` before retrying |
 | Comment replies | `reply` waits at least 20 s since the last reply on that account | Reply to a batch of comments at most once an hour, write a different reply each time, and skip replying to every single emoji |
